@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+# $1: A number of milliseconds.
+#
+# Displays a number of milliseconds in a human readable format.
+
+total_milliseconds=$1
+total_seconds=$((total_milliseconds / 1000))
+total_minutes=$((total_seconds / 60))
+total_hours=$((total_minutes / 60))
+total_days=$((total_hours / 24))
+
+milliseconds=$((total_milliseconds % 1000))
+seconds=$((total_seconds % 60))
+minutes=$((total_minutes % 60))
+hours=$((total_hours % 24))
+
+parts=()
+add_part() {
+    if [ $2 -gt 0 ]; then
+        [ $2 -ne 1 ] && local ending="s"
+        parts+=( "$(printf "${1}%s" ${@:2} $ending)" )
+    fi
+}
+
+add_part '%d day' $total_days
+add_part '%d hour' $hours
+add_part '%d minute' $minutes
+add_part '%d second' $seconds
+add_part '%d millisecond' $milliseconds
+
+num_parts=${#parts[@]}
+if [ $num_parts -gt 1 ]; then
+    parts[num_parts]=${parts[num_parts - 1]}
+    parts[num_parts - 1]="and"
+fi
+
+echo ${parts[*]}
+

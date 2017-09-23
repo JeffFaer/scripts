@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+# $1: A number of seconds
+# $2+: A command to run with arguments
+#
+# Run notify-send if the command takes longer than $1 seconds
+
+if [[ -z $DISPLAY ]]; then
+    exec ${@:2}
+fi
+
+begin=$(date +%s)
+( "${@:2}" )
+exit_status=$?
+end=$(date +%s)
+
+elapsed=$((end - begin))
+if [[ $elapsed -ge $1 ]]; then
+    icon=$([[ $exit_status == 0 ]] && echo info || echo error)
+    summary="Command took $elapsed seconds to complete."
+
+    notify-send --urgency=low -i "$icon" "$summary" "${*:2}"
+fi
+
+exit $exit_status

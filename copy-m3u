@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+
+# $1: An m3u file.
+# $2?: The destination directory. If not given, this script will create a
+#      directory with the same name as the m3u file.
+#
+# Copies an m3u file to a directory.
+# This script accounts for destinations that might be on gvfs.
+
+if [ -z "$1" ] || [ ! -f "$1" ]; then
+    echo "Must provide valid m3u file."
+    exit 1
+fi
+
+# $1: *.m3u file
+# $2?: Destination. Default is ./{Name of m3u file}
+check_for_art() {
+    local f
+    for f in {album,cover}.{jpg,png}; do
+        if [ -f "$1/$f" ]; then
+            echo "$1/$f"
+            return
+        fi
+    done
+
+    return 1
+}
+
+dir=$(dirname "$1")
+# File name
+m3u_name=${1##*/}
+# Strip extension
+m3u_name=${m3u_name%.*}
+if [ "$#" -gt 1 ]; then
+    dest="$2"
+else
+    dest="./$m3u_name"
+fi
+mkdir -p "$dest"
+
+echo "Copying $1 to $dest"
+
+if df -P -T "$dest" | tail -n +2 | awk '{print $2}' | grep -q gvfs; then
+    is_gvfs=true
+fi
+
+copy() {
+    if [ $is_gvfs ]; then
+        gvfs-copy "$@"
+    else
+        ln "$@" 2>/dev/null || cp "$@"
+    fi
+}
+
+IFS=$'\n'
+m3u_entries=( $(grep -v "^#" "$1") )
+unset IFS
+
+total=${#m3u_entries[@]}
+current=0
+for m3u_entry in "${m3u_entries[@]}"; do
+    progress show $current $total
+    file=${dir}/${m3u_entry}
+    parents=$(dirname "$m3u_entry")
+    new_location=${dest}/${parents}
+
+    mkdir -p "$new_location"
+    copy "$file" "$new_location"
+
+    # check for album art
+    if [ -z "$(check_for_art "$new_location")" ]; then
+        file_dir=${dir}/${parents}
+        art=$(check_for_art "$file_dir")
+        if [ -n "$art" ]; then
+            copy "$art" "$new_location"
+        fi
+    fi
+    ((current++))
+done
+
+progress show $current $total
+echo

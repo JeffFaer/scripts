@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+# $1: The file with episode names, one episode per line.
+#
+# For each line in a given file, creates a file of the format "E## - ${line}"
+
+i=1
+while read line; do
+    if [ -n "$line" ]; then
+        filename=$(printf "E%02d - %s" $i "$line")
+        if [ ! -f "$filename" ]; then
+            if [ -z "$(find -maxdepth 1 -name "${filename}*")" ]; then
+                touch "$filename"
+            fi
+        fi
+        ((i++))
+    fi
+done < $1

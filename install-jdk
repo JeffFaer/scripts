@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+
+# $1?: A JVM directory or a directory containing a compressed JDK. Defaults to
+#      the current directory
+#
+# Attempts to install a JDK to /usr/lib/jvm.
+#
+# This script will extract compressed JDK files and install them in
+# /usr/lib/jvm. If the given directory is an already extracted JDK, it will be
+# moved to /usr/lib/jvm. update-alternatives will be generated for the new JDK.
+#
+# If $1 is already in /usr/lib/jvm, only update-alternatives will be created.
+
+if [ $(id -u) -ne 0 ]; then
+    echo "This script needs to be run as root."
+    exec sudo -k "$0" "$@"
+
+    # Exec shouldn't return, but just in case.
+    exit $?
+fi
+
+############################
+#  BEGIN HELPER FUNCTIONS  #
+############################
+
+# $1: jdk_dir
+# $2: command name
+_find_command() {
+    for dir in bin jre/bin jre/lib; do
+        file="$1/$dir/$2"
+        if [ -x "$file" ]; then
+            echo "$file"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+_is_jdk_dir() {
+    [ -d "$1" ] && [ -d "${1}/bin" ] &&\
+        _find_command "$1" java &>/dev/null &&\
+        _find_command "$1" javac &>/dev/null
+}
+
+# $1 must pass _is_jdk_dir
+_get_version() {
+    local java=$(_find_command "$1" java)
+
+    $java -version |& sed -nre 's/(openjdk|java) version "(.*)"/\2/p'
+}
+
+# $1 version number
+# 1.8.0      -> 180000
+# 1.8.0_56   -> 180056
+# 1.8.0_121  -> 180121
+#
+# To prevent big issues from arising, the priority is truncated at 6 digits.
+# 1.8.0_1000 -> 180100
+_get_priority() {
+    local split=( ${1/_/ } )
+    split[0]=${split[0]//./}
+
+    local padding=000
+    split[0]="${split[0]:0:3}${padding:${#split[0]}}"
+    split[1]=$(printf "%03d" ${split[1]:0:3})
+
+    echo "${split[0]}${split[1]}"
+}
+
+# Report which line of the file caused the error.
+_report_error() {
+    echo "Error occurred on line ${BASH_LINENO} of ${BASH_SOURCE}:" >&2
+    sed -ne "${BASH_LINENO}p" ${BASH_SOURCE} >&2
+}
+
+# Clean up temp files.
+_cleanup() {
+    if [ -n "$extract_to" ]; then
+        rm -rf "$extract_to"
+    fi
+}
+
+##########################
+#  END HELPER FUNCTIONS  #
+##########################
+
+set -e -o pipefail
+trap _report_error ERR
+
+# Clean up temp files on exiting.
+trap _cleanup EXIT
+
+jdk_dir=$(realpath "${1:-$(pwd)}")
+
+if ! _is_jdk_dir "$jdk_dir"; then
+    if [ -d "$jdk_dir" ]; then
+        echo "Looking for compressed JDK in $jdk_dir"
+
+        files=()
+        for file in "$jdk_dir"/*jdk*; do
+            [ -f "$file" ] && files+=( "$file" )
+        done
+
+        if [ ${#files[@]} -eq 0 ]; then
+            echo "Could not find a compressed JDK file."
+            exit 1
+        elif [ ${#files[@]} -eq 1 ]; then
+            file_to_install=${files[0]}
+            echo "Found: $file_to_install"
+        else
+            echo "Please select one of the following."
+            select file_to_install in "${files[@]}"; do
+                echo "Selected: $file_to_install"
+                break
+            done
+        fi
+    elif [ -f "$jdk_dir" ]; then
+        file_to_install="$jdk_dir"
+    else
+        echo "Unknown parameter $jdk_dir"
+        exit 1
+    fi
+
+    extract_to=$(mktemp -d)
+    case "$file_to_install" in
+        *.tar.gz)
+            pv -N "Extracting" "$file_to_install" | tar -xzf - -C "$extract_to"
+            ;;
+        *)
+            echo "I don't know how to extract $file_to_install"
+            exit 1
+            ;;
+    esac
+
+    count=$(ls -1U "$extract_to" | wc -l)
+    if [ $count -eq 1 ] && [ -d "$extract_to"/* ]; then
+        jdk_dir=$(echo "$extract_to"/*)
+    else
+        jdk_dir=$extract_to
+    fi
+
+    if ! _is_jdk_dir "$jdk_dir"; then
+        echo "$file_to_install was not a JDK."
+        exit 1
+    fi
+fi
+
+if [[ $jdk_dir = /usr/lib/jvm/* ]]; then
+    version=$(_get_version "$jdk_dir")
+else
+    version=$(_get_version "$jdk_dir")
+    jdk_name="jdk${version}"
+    new_location=/usr/lib/jvm/$jdk_name
+    if [ -e "$new_location" ]; then
+        echo "$new_location already exists!"
+        exit 1
+    fi
+
+    parent=$(dirname "$new_location")
+    mkdir -p "$parent"
+    mv "$jdk_dir" "$new_location"
+    jdk_dir=$new_location
+    chown -R root:root "$jdk_dir"
+fi
+
+slave_commands=( appletviewer extcheck idlj jar jarsigner java javac javadoc \
+javah javap jcmd jconsole jdb jexec jhat jinfo jps jrunscript jsadebugd \
+jshell jstack jstat jstatd keytool native2ascii orbd pack200 policytool \
+rmic rmid rmiregistry schemagen serialver servertool tnameserv unpack200 wsgen \
+wsimport xjc )
+
+priority=$(_get_priority "$version")
+command="--install /usr/lib/jvm/default-java default-java"
+command+=" \"$jdk_dir\" $priority"
+
+for cmd in "${slave_commands[@]}"; do
+    echo "Updating $cmd"
+    path=$(_find_command "$jdk_dir" "$cmd" || echo)
+    if [ -n "$path" ]; then
+        # If it was previously set up as a master link, remove all entries.
+        update-alternatives --remove-all $cmd &>/dev/null || true
+        command+=" --slave /usr/bin/$cmd $cmd \"$path\""
+    else
+        echo "Could not find $cmd"
+    fi
+done
+
+eval update-alternatives $command

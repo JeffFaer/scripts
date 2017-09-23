@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+# $@: Files to process
+#
+# For each file, creates a new file in the same directory. Copies the owner and
+# facl over to the original file.
+
+for file in "$@"; do
+    parent=$(dirname "$file")
+    name=$(basename "$file")
+    permissions="${parent}/${name}.permissions"
+
+    if [ -e "$permissions" ]; then
+        echo "$permissions already exists!"
+        exit 1
+    fi
+
+    if [ -d "$file" ]; then
+        mkdir "$permissions"
+    else
+        touch "$permissions"
+    fi
+
+    owner=$(stat --printf %U:%G "$permissions")
+
+    getfacl "$permissions" | setfacl --set-file - "$file"
+    chown "$owner" "$file"
+
+    rm -r "$permissions"
+done

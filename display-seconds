@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+# $1: A number of seconds.
+#
+# Displays a number of seconds in a human readable format.
+
+display-milliseconds $(($1 * 1000))

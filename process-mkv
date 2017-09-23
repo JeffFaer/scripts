@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+# $1: An mkv file.
+#
+# Performs several actions in sequence:
+#   1) Looks for a file that doesn't end with .mkv in $1's directory
+#       1.1) If a non-mkv file is found, renames $1 to that file with .mkv added
+#       1.2) Remove the non-mkv file
+#   2) Calls update-permissions
+#   3) Calls tag-mkv
+
+file=$1
+dir=$(dirname "$file")
+file_name=$(basename "$file")
+
+next_episode=$(find "$dir" -type f -not -name '*.mkv' | sort | head -1)
+next_episode_name=$(basename "$next_episode")
+
+if [[ -n $next_episode_name ]]; then
+    echo "Renaming $file_name to ${next_episode_name}.mkv"
+    mv "$file" "${next_episode}.mkv"
+    file=${next_episode}.mkv
+    file_name=$next_episode
+
+    echo "Removing placeholder for $file_name"
+    rm "$next_episode"
+fi
+
+echo "Updating permissions of $file_name"
+update-permissions "$file"
+
+echo "Tagging $file_name"
+tag-mkv "$file"

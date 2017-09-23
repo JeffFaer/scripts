@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+# $@: A command to run.
+#
+# Runs the command and waits for a user to press a key before exiting.
+
+i=1
+length=0
+for element in "$@"; do
+    if [ ";" == "$element" ]; then
+        "${@:i:length}"
+        ((i += $length))
+        ((i++))
+        length=0
+    else
+        ((length++))
+    fi
+done
+
+if [ "$length" -gt "0" ]; then
+    "${@:i:length}"
+fi
+
+echo "Press any key to continue..."
+read -n1
