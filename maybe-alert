@@ -6,7 +6,7 @@
 # Run notify-send if the command takes longer than $1 seconds
 
 if [[ -z $DISPLAY ]]; then
-    exec ${@:2}
+    exec "${@:2}"
 fi
 
 begin=$(date +%s)

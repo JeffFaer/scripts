@@ -15,4 +15,4 @@ while read line; do
         fi
         ((i++))
     fi
-done < $1
+done < "$1"

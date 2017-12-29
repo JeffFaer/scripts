@@ -17,9 +17,9 @@ hours=$((total_hours % 24))
 
 parts=()
 add_part() {
-    if [ $2 -gt 0 ]; then
-        [ $2 -ne 1 ] && local ending="s"
-        parts+=( "$(printf "${1}%s" ${@:2} $ending)" )
+    if [[ $2 -gt 0 ]]; then
+        [[ $2 -ne 1 ]] && local ending="s"
+        parts+=( "$(printf "${1}%s" "${@:2}" $ending)" )
     fi
 }
 
@@ -30,7 +30,7 @@ add_part '%d second' $seconds
 add_part '%d millisecond' $milliseconds
 
 num_parts=${#parts[@]}
-if [ $num_parts -gt 1 ]; then
+if [[ $num_parts -gt 1 ]]; then
     parts[num_parts]=${parts[num_parts - 1]}
     parts[num_parts - 1]="and"
 fi

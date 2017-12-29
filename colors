@@ -7,7 +7,7 @@ colors=$(tput colors)
 len=${#colors}
 end="$(tput sgr0)"
 
-while [ $i -lt $colors ]; do
+while [[ $i -lt $colors ]]; do
     start="$(tput setaf $i)"
     printf "${start}%${len}d${end} " $i
 
