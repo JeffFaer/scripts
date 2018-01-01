@@ -1,0 +1,205 @@
+#!/usr/bin/env python
+"""Converts the HealthEquity investments spreadsheet (as a csv) into ofx for Quicken."""
+
+from __future__ import absolute_import, print_function
+
+import collections
+import csv
+from datetime import date
+from datetime import datetime
+from enum import Enum
+import hashlib
+from itertools import islice
+from operator import itemgetter
+import sys
+
+__GARBAGE_ROWS = 2
+
+__INPUT_DATE_FORMAT = "%m/%d/%Y"
+__OFX_DATETIME_FORMAT = "%Y%m%d%H%M%S"
+
+# Maps a HealthEquity row to Transaction constructor arguments.
+__TXN_MAPPING = {
+        'txn_type': lambda d: TransactionType[d['Category'].upper()],
+        'date': lambda d: datetime.strptime(d['Date'], __INPUT_DATE_FORMAT).date(),
+        'description': itemgetter('Description'),
+        'amount': lambda d: d['Amount'].lstrip('$'),
+        'security': itemgetter('Fund'),
+        'quantity': itemgetter('Shares'),
+}
+
+__OFX_BOILERPLATE = """
+DATA:OFXSGML
+ENCODING:UTF-8
+<OFX>
+  <INVSTMTMSGSRSV1>
+    <INVSTMTTRNRS>
+      <TRNUID></TRNUID>
+      <STATUS>
+        <CODE>0</CODE>
+        <SEVERITY>INFO</SEVERITY>
+      </STATUS>
+      <INVSTMTRS>
+        <DTASOF>{current_time}</DTASOF>
+        <CURDEF>USD</CURDEF>
+        <INVACCTFROM>
+          <BROKERID>healthequity.com</BROKERID>
+          <ACCTID>HealthEquity HSA</ACCTID>
+        </INVACCTFROM>
+        <INVTRANLIST>
+          <DTSTART>{start_time}</DTSTART>
+          <DTEND>{end_time}</DTEND>
+          {transactions}
+        </INVTRANLIST>
+      </INVSTMTRS>
+    </INVSTMTTRNRS>
+  </INVSTMTMSGSRSV1>
+</OFX>
+"""
+__BUY_TEMPLATE = """
+<BUYSTOCK>
+  <INVBUY>
+    <INVTRAN>
+      <FITID>{unique_id}</FITID>
+      <DTTRADE>{date}</DTTRADE>
+      <MEMO>{description}</MEMO>
+    </INVTRAN>
+    <SECID>
+      <UNIQUEID>{security}</UNIQUEID>
+      <UNIQUEIDTYPE>CUSIP</UNIQUEIDTYPE>
+    </SECID>
+    <UNITS>{quantity}</UNITS>
+    <UNITPRICE>SHARES</UNITPRICE>
+    <TOTAL>-{amount}</TOTAL>
+    <SUBACCTSEC>OTHER</SUBACCTSEC>
+    <SUBACCTFUND>OTHER</SUBACCTFUND>
+  </INVBUY>
+  <BUYTYPE>BUY</BUYTYPE>
+</BUYSTOCK>
+"""
+__SELL_TEMPLATE = """
+<SELLSTOCK>
+  <INVSELL>
+    <INVTRAN>
+      <FITID>{unique_id}</FITID>
+      <DTTRADE>{date}</DTTRADE>
+      <MEMO>{description}</MEMO>
+    </INVTRAN>
+    <SECID>
+      <UNIQUEID>{security}</UNIQUEID>
+      <UNIQUEIDTYPE>CUSIP</UNIQUEIDTYPE>
+    </SECID>
+    <UNITS>-{quantity}</UNITS>
+    <UNITPRICE>SHARES</UNITPRICE>
+    <TOTAL>{amount}</TOTAL>
+    <SUBACCTSEC>OTHER</SUBACCTSEC>
+    <SUBACCTFUND>OTHER</SUBACCTFUND>
+  </INVSELL>
+  <SELLTYPE>SELL</SELLTYPE>
+</SELLSTOCK>
+"""
+__DIVIDEND_TEMPLATE = """
+<REINVEST>
+  <INVTRAN>
+      <FITID>{unique_id}</FITID>
+      <DTTRADE>{date}</DTTRADE>
+      <MEMO>{description}</MEMO>
+  </INVTRAN>
+  <SECID>
+    <UNIQUEID>{security}</UNIQUEID>
+    <UNIQUEIDTYPE>CUSIP</UNIQUEIDTYPE>
+  </SECID>
+  <INCOMETYPE>DIVIDEND</INCOMETYPE>
+  <TOTAL>{amount}</TOTAL>
+  <SUBACCTSEC>OTHER</SUBACCTSEC>
+  <UNITS>{quantity}</UNITS>
+  <UNITPRICE>SHARES</UNITPRICE>
+</REINVEST>
+"""
+
+class TransactionType(Enum):
+    UNKNOWN = 0
+    BUY = 1
+    SELL = 2
+    DIVIDEND = 3
+
+def get_ofx_template(txn_type):
+    if txn_type == TransactionType.BUY:
+        return __BUY_TEMPLATE
+    elif txn_type == TransactionType.SELL:
+        return __SELL_TEMPLATE
+    elif txn_type == TransactionType.DIVIDEND:
+        return __DIVIDEND_TEMPLATE
+
+    raise ValueError("No template for {}".format(txn_type))
+
+class Transaction:
+    def __init__(self, txn_type, date, description, amount, security, quantity,
+            unique_id=None):
+        self.txn_type = txn_type
+        self.date = date
+        self.description = description
+        self.amount = amount
+        self.security = security
+        self.quantity = quantity
+        self.unique_id = unique_id if unique_id else self._generate_unique_id()
+
+    def _generate_unique_id(self):
+        s = "{} {} {} {} {}".format(self.txn_type, self.date, self.amount, self.security, self.quantity)
+        return hashlib.sha1(s).hexdigest()
+
+    def __repr__(self):
+        return str(vars(self))
+
+def read_transactions(csv_input):
+    reader = csv.reader(csv_input)
+    consume(reader, __GARBAGE_ROWS)
+
+    column_names = reader.next()
+    transactions = []
+
+    for row in reader:
+        raw_values = dict(zip(column_names, row))
+        values = apply_mapping(__TXN_MAPPING, raw_values)
+        transactions.append(Transaction(**values))
+
+    return transactions
+
+def consume(iterator, n):
+    "Advance the iterator n-steps ahead. If n is none, consume entirely."
+    # Use functions that consume iterators at C speed.
+    if n is None:
+        # feed the entire iterator into a zero-length deque
+        collections.deque(iterator, maxlen=0)
+    else:
+        # advance to the empty slice starting at position n
+        next(islice(iterator, n, n), None)
+
+def apply_mapping(mapping, dictionary):
+    return {
+            key: map_value(dictionary) if callable(map_value) else map_value
+            for key, map_value in mapping.iteritems()
+    }
+
+def to_ofx(transactions):
+    txns = ""
+    for txn in transactions:
+        template = get_ofx_template(txn.txn_type)
+        values = dict(vars(txn))
+        values['date'] = date.strftime(values['date'], __OFX_DATETIME_FORMAT)
+        txns += template.format(**values)
+
+    first_txn = min(transactions, key=lambda t: t.date)
+    last_txn = max(transactions, key=lambda t: t.date)
+
+    return __OFX_BOILERPLATE.format(
+            start_time=date.strftime(first_txn.date, __OFX_DATETIME_FORMAT),
+            current_time=datetime.strftime(datetime.now(), __OFX_DATETIME_FORMAT),
+            end_time=date.strftime(last_txn.date, __OFX_DATETIME_FORMAT),
+            transactions=txns)
+
+if __name__ == '__main__':
+    csv_input = open(sys.argv[1], 'r') if len(sys.argv) > 1 else sys.stdin
+    with csv_input:
+        txns = read_transactions(csv_input)
+        print(to_ofx(txns))

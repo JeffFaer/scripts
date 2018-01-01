@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+if [[ -z $2 ]]; then
+    libreoffice --headless --convert-to csv "$1"
+else
+    outdir=$(mktemp -d)
+    libreoffice --headless --convert-to csv "$1" --outdir "$outdir"
+    cp "$outdir"/* "$2"
+fi
+
