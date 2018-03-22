@@ -52,30 +52,56 @@ _get_version() {
 }
 
 # $1 version number
-# 1.8.0      -> 008000
-# 1.8.0_56   -> 008056
-# 1.8.0_121  -> 008121
-#
-# To prevent big issues from arising, the priority is truncated at 6 digits.
-# 1.8.0_1000 -> 008100
+# 1.8.0      -> 800000
+# 1.8.0_56   -> 800056
+# 1.8.0_121  -> 800121
+# 1.8.0_1000 -> 800999
+# 9          -> 900000
+# 9.0.4      -> 900004
 _get_priority() {
-    local split=( ${1/_/ } )
-    local major_version minor_version
+    local major minor security
 
     # Determine the major version.
-    if [[ ${split[0]} =~ ^1\..*$ ]]; then
+    if [[ $1 =~ ^1\..*$ ]]; then
+        # Old-style version string (1.8.0_123).
         local IFS='.'
-        local major_version_parts=( ${split[0]} )
-        major_version=${major_version_parts[1]}
+        local split=( $1 )
+        unset IFS
+
+        major=${split[1]}
+
+        local IFS='_'
+        split=( ${split[2]} )
+        unset IFS
+
+        minor=${split[0]}
+        security=${split[1]}
     else
-        major_version=${split[0]}
+        # New-style JEP223 version string (9.0.4).
+        local IFS='.'
+        local split=( $1 )
+        unset IFS
+
+        major=${split[0]}
+        minor=${split[1]}
+        security=${split[2]}
     fi
 
-    # Determine the minor version.
-    minor_version=$(printf "%03d" "${split[1]:0:3}")
+    if [[ ${#minor} -gt 2 ]]; then
+        minor=99
+    else
+        minor=$(printf "%02d" "$minor")
+    fi
 
-    echo "${major_version}${minor_version}"
+    if [[ ${#security} -gt 3 ]]; then
+        security=999
+    else
+        security=$(printf "%03d" "$security")
+    fi
+
+    echo "${major}${minor}${security}"
 }
+
 
 # Report which line of the file caused the error.
 _report_error() {
