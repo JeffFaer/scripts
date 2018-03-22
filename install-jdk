@@ -13,7 +13,7 @@
 
 if [[ $(id -u) -ne 0 ]]; then
     echo "This script needs to be run as root."
-    exec sudo -k "$0" "$@"
+    exec sudo "PATH=$PATH" -k bash -$- "$0" "$@"
 
     # Exec shouldn't return, but just in case.
     exit $?
