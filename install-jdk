@@ -48,25 +48,33 @@ _get_version() {
     local java
     java=$(_find_command "$1" java)
 
-    $java -version |& sed -nre 's/(openjdk|java) version "(.*)"/\2/p'
+    $java -version |& sed -nre 's/(openjdk|java) version "(.+)".*/\2/p'
 }
 
 # $1 version number
-# 1.8.0      -> 180000
-# 1.8.0_56   -> 180056
-# 1.8.0_121  -> 180121
+# 1.8.0      -> 008000
+# 1.8.0_56   -> 008056
+# 1.8.0_121  -> 008121
 #
 # To prevent big issues from arising, the priority is truncated at 6 digits.
-# 1.8.0_1000 -> 180100
+# 1.8.0_1000 -> 008100
 _get_priority() {
     local split=( ${1/_/ } )
-    split[0]=${split[0]//./}
+    local major_version minor_version
 
-    local padding=000
-    split[0]="${split[0]:0:3}${padding:${#split[0]}}"
-    split[1]=$(printf "%03d" "${split[1]:0:3}")
+    # Determine the major version.
+    if [[ ${split[0]} =~ ^1\..*$ ]]; then
+        local IFS='.'
+        local major_version_parts=( ${split[0]} )
+        major_version=${major_version_parts[1]}
+    else
+        major_version=${split[0]}
+    fi
 
-    echo "${split[0]}${split[1]}"
+    # Determine the minor version.
+    minor_version=$(printf "%03d" "${split[1]:0:3}")
+
+    echo "${major_version}${minor_version}"
 }
 
 # Report which line of the file caused the error.
@@ -134,9 +142,9 @@ if ! _is_jdk_dir "$jdk_dir"; then
             ;;
     esac
 
-    count=$(find "$extract_to" | wc -l)
-    if [[ $count -eq 1 && -d "$extract_to"/* ]]; then
-        jdk_dir=$(echo "$extract_to"/*)
+    children=( $(find "$extract_to" -mindepth 1 -maxdepth 1) )
+    if [[ ${#children[@]} -eq 1 ]]; then
+        jdk_dir=${children[0]}
     else
         jdk_dir=$extract_to
     fi
