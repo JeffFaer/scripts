@@ -17,10 +17,18 @@ for file in "$@"; do
     next_episode_name=$(basename "$next_episode")
 
     if [[ -n $next_episode_name ]]; then
-        echo "Renaming $file_name to ${next_episode_name}.mkv"
-        mv "$file" "${next_episode}.mkv"
-        file=${next_episode}.mkv
-        file_name=$next_episode
+        new_file="${next_episode}.mkv"
+        new_file_name="${next_episode_name}.mkv"
+        echo "Renaming $file_name to $new_file_name"
+
+        if [[ -f $new_file ]]; then
+            echo "$new_file_name already exists."
+            exit 1
+        fi
+
+        mv "$file" "$new_file"
+        file=$new_file
+        file_name=$new_file_name
 
         echo "Removing placeholder for $file_name"
         rm "$next_episode"
