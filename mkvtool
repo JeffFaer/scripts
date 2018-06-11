@@ -194,11 +194,15 @@ def get_srt_files(vid_file, dirs)
 
   dirs.each do |dir|
     dir = File.expand_path(dir, base_dir)
-    glob = File.expand_path("#{base}*.srt", dir)
+    glob = File.expand_path("#{escape_glob(base)}*.srt", escape_glob(dir))
     matches += Dir.glob(glob)
   end
 
   return matches
+end
+
+def escape_glob(s)
+  s.gsub(/[\\\{\}\[\]\*\?]/) { |x| "\\"+x }
 end
 
 def combine(vid_file, srt_files = [])
