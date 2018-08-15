@@ -23,6 +23,7 @@ new_background_name=$(basename "$new_background")
 cp "$new_background" "$current_wallpaper_location"
 new_background_uri="file://${current_wallpaper_location}/${new_background_name}"
 gsettings set org.gnome.desktop.background picture-uri "$new_background_uri"
+gsettings set org.gnome.desktop.screensaver picture-uri "$new_background_uri"
 
 if [[ -n $old_background_name ]]; then
     rm "${current_wallpaper_location}/${old_background_name}"
