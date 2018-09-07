@@ -46,7 +46,7 @@ fi
 
 copy() {
     if [ $is_gvfs ]; then
-        gvfs-copy "$@"
+        gio copy -p "$@"
     else
         ln "$@" 2>/dev/null || cp "$@"
     fi
