@@ -9,17 +9,29 @@ if [[ -z $DISPLAY ]]; then
     exec "${@:2}"
 fi
 
+max=$1
+command="${*:2}"
 begin=$(date +%s)
+alerted=0
+
+_alert() {
+    local exit_status=$?
+
+    if ((!alerted)); then
+        alerted=1
+        local end=$(date +%s)
+
+        local elapsed=$((end - begin))
+        if [[ $elapsed -ge $max ]]; then
+            icon=$([[ $exit_status == 0 ]] && echo info || echo error)
+            summary="Command took $(display-seconds $elapsed) to complete."
+
+            notify-send --urgency=low -i "$icon" "$summary" "$command"
+        fi
+    fi
+
+    exit $exit_status
+}
+trap '_alert' INT QUIT TERM EXIT
+
 ( "${@:2}" )
-exit_status=$?
-end=$(date +%s)
-
-elapsed=$((end - begin))
-if [[ $elapsed -ge $1 ]]; then
-    icon=$([[ $exit_status == 0 ]] && echo info || echo error)
-    summary="Command took $elapsed seconds to complete."
-
-    notify-send --urgency=low -i "$icon" "$summary" "${*:2}"
-fi
-
-exit $exit_status
