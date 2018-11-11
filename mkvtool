@@ -372,7 +372,7 @@ if options.combine then
   ARGV.each do |file|
     puts file
 
-    srt_files = get_srt_files(file, ["", "subtitles"])
+    srt_files = get_srt_files(file, options.srt_dirs)
     puts "Found : #{srt_files}"
 
     if not srt_files.empty? then
