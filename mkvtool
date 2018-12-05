@@ -308,7 +308,7 @@ options.parse_filenames = false
 options.parse_transform = {}
 
 options.combine = false
-options.srt_dirs = [ ".", "./subs/", "./subtitles/" ]
+options.srt_dirs = [ ".", "./subs/", "./subtitles/", "./Subs" ]
 
 options.convert = false
 
