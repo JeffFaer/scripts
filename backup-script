@@ -78,6 +78,10 @@ while true; do
     esac
 done
 
+if [[ -z $date ]]; then
+    date=now
+fi
+
 if [[ -z $destination_root ]]; then
     destination_root=$PWD
 fi
@@ -91,7 +95,7 @@ fi
 ###########
 #  Setup  #
 ###########
-if ! date_string=$(date --date "${date:-now}" +%Y.%m.%d); then
+if ! date_string=$(date --date "${date}" +%Y.%m.%d); then
     echo "Invalid date ${date}"
     exit 1
 fi
@@ -138,10 +142,8 @@ if [[ -n $previous_destination ]]; then
     rsync_flags+=( --link-dest "$previous_destination" )
 fi
 
-echo "rsync ${rsync_flags[@]} ${paths_to_backup[@]} ${destination}"
+echo "rsync ${rsync_flags[*]} ${paths_to_backup[*]} ${destination}"
 rsync "${rsync_flags[@]}" "${paths_to_backup[@]}" "${destination}"
-
-echo "Ended at $(date)"
 
 echo "Estimating incremental disk usage."
 usage_after=$(get_disk_usage "$destination_root")
@@ -149,3 +151,5 @@ usage_diff=$((usage_after - usage_before))
 
 human_usage_diff=$(numfmt --to=iec-i --suffix=B "$usage_diff")
 echo "Used $human_usage_diff"
+
+echo "Ended at $(date)"
