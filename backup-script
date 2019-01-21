@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+
+usage() {
+    echo "$0 [-h|--help] [--destination-root DIR] [backup path]..."
+    echo "--date                defaults to today"
+    echo "--destination-root    defaults to \$PWD ($PWD)"
+    echo "--dry-run"
+    exit 1
+}
+
+DEFAULT_BACKUP_PATHS=(
+    "$HOME"
+    /opt
+    /etc
+    /var/lib/plexmediaserver
+)
+
+######################
+#  Helper Functions  #
+######################
+
+# $1: The root directory
+# $2: The current destination
+get_previous_destination() {
+    find "$1" -maxdepth 1 -mindepth 1 -type d -not -path "$2"\
+        | sort -rg\
+        | head -1
+}
+
+get_package_list() {
+    dpkg -l
+}
+
+get_disk_usage() {
+    du -sB1 "$1" | cut -f1
+}
+
+#####################
+#  Parse Arguments  #
+#####################
+
+opts=$(getopt -o 'h' --long 'help,date:,destination-root:,dry-run,' -n "$0" -- "$@")
+exit_code=$?
+if [[ $exit_code != 0 ]]; then
+    echo "Error parsing options: $opts"
+    exit 1
+fi
+eval set -- "$opts"
+
+while true; do
+    case "$1" in
+        --)
+            shift
+            break
+            ;;
+        -h|--help)
+            usage
+            ;;
+        --date)
+            if [[ -n $2 ]]; then
+                date=$2
+            fi
+            shift 2
+            ;;
+        --destination-root)
+            if [[ -n $2 ]]; then
+                destination_root=$(realpath "$2")
+            fi
+            shift 2
+            ;;
+        --dry-run)
+            dry_run=1
+            shift
+            ;;
+        *)
+            echo "Unrecognized option: $1"
+            exit 1
+    esac
+done
+
+if [[ -z $destination_root ]]; then
+    destination_root=$PWD
+fi
+
+if [[ $# -gt 0 ]]; then
+    backup_paths=( "$@" )
+else
+    backup_paths=( "${DEFAULT_BACKUP_PATHS[@]}" )
+fi
+
+###########
+#  Setup  #
+###########
+date_string=$(date --date "${date:-now}" +%Y.%m.%d)
+destination="$destination_root/$date_string"
+
+previous_destination=$(\
+    get_previous_destination "$destination_root" "$destination")
+
+mkdir -p "$destination"
+exec &> >(tee -ia "$destination/log")
+
+################
+#  Processing  #
+################
+
+echo "Starting at $(date)"
+if [[ -n $dry_run ]]; then
+    echo "THIS IS A DRY RUN"
+fi
+
+echo "Identified $previous_destination as previous backup."
+
+echo "Estimating previous disk usage."
+usage_before=$(get_disk_usage "$destination_root")
+
+echo "Getting package list -> $destination/packages.txt"
+get_package_list > "$destination/packages.txt"
+
+for path in "${backup_paths[@]}"; do
+    if [[ ! -e $path ]]; then
+        echo "$path does not exist. Skipping."
+        continue
+    fi
+
+    if [[ $path =~ .*/$ ]]; then
+        path_parent=$path
+    else
+        path_parent=$(dirname "$path")
+    fi
+
+    path_destination=${destination}/${path_parent#/}
+    mkdir -p "$path_destination"
+
+    echo "$path -> $path_destination"
+
+    cmd='rsync --archive --hard-links --human-readable --verbose --progress'
+    if [[ -d $path && -f $path/.backup_exclude ]]; then
+        cmd+=" --exclude-from \"$path/.backup_exclude\""
+    fi
+    if [[ -n $previous_destination ]]; then
+        previous_path_destination=${previous_destination}/${path_parent#/}
+        if [[ -e $previous_path_destination ]]; then
+            cmd+=" --link-dest \"$previous_path_destination\""
+        fi
+    fi
+    if [[ -n $dry_run ]]; then
+        cmd+=" --dry-run"
+    fi
+    cmd+=" \"$path\" \"$path_destination\""
+
+    echo "$cmd"
+    eval "$cmd"
+done
+
+echo "Ended at $(date)"
+
+echo "Estimating incremental disk usage."
+usage_after=$(get_disk_usage "$destination_root")
+usage_diff=$((usage_after - usage_before))
+
+human_usage_diff=$(numfmt --to=iec-i --suffix=B "$usage_diff")
+echo "Used $human_usage_diff"
