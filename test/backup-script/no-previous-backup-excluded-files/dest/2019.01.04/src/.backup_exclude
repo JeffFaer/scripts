@@ -1,1 +1,2 @@
-excluded_file
+/excluded_file
+/subdir/other_excluded_file

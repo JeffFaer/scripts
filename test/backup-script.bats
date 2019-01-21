@@ -44,7 +44,7 @@ run_golden_file_test() {
     [[ $status -eq 0 ]]
   )
 
-  run diff -x log -x packages.txt "${test_case_dir}/dest" "${dest_dir}"
+  run diff -r -x log -x packages.txt "${test_case_dir}/dest" "${dest_dir}"
   echo "$output"
   [[ $status -eq 0 ]]
 }

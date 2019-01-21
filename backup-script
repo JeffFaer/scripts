@@ -122,41 +122,24 @@ usage_before=$(get_disk_usage "$destination_root")
 echo "Getting package list -> $destination/packages.txt"
 get_package_list > "$destination/packages.txt"
 
-for path in "${paths_to_backup[@]}"; do
-    if [[ ! -e $path ]]; then
-        echo "$path does not exist. Skipping."
-        continue
-    fi
+rsync_flags=(
+  --archive
+  --hard-links
+  --human-readable
+  --verbose
+  --progress
+  --relative
+  --filter ':- .backup_exclude'
+)
+if [[ -n $dry_run ]]; then
+    rsync_flags+=( --dry-run )
+fi
+if [[ -n $previous_destination ]]; then
+    rsync_flags+=( --link-dest "$previous_destination" )
+fi
 
-    if [[ $path =~ .*/$ ]]; then
-        path_parent=$path
-    else
-        path_parent=$(dirname "$path")
-    fi
-
-    path_destination=${destination}/${path_parent#/}
-    mkdir -p "$path_destination"
-
-    echo "$path -> $path_destination"
-
-    cmd='rsync --archive --hard-links --human-readable --verbose --progress'
-    if [[ -d $path && -f $path/.backup_exclude ]]; then
-        cmd+=" --exclude-from \"$path/.backup_exclude\""
-    fi
-    if [[ -n $previous_destination ]]; then
-        previous_path_destination=${previous_destination}/${path_parent#/}
-        if [[ -e $previous_path_destination ]]; then
-            cmd+=" --link-dest \"$previous_path_destination\""
-        fi
-    fi
-    if [[ -n $dry_run ]]; then
-        cmd+=" --dry-run"
-    fi
-    cmd+=" \"$path\" \"$path_destination\""
-
-    echo "$cmd"
-    eval "$cmd"
-done
+echo "rsync ${rsync_flags[@]} ${paths_to_backup[@]} ${destination}"
+rsync "${rsync_flags[@]}" "${paths_to_backup[@]}" "${destination}"
 
 echo "Ended at $(date)"
 
