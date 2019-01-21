@@ -91,7 +91,10 @@ fi
 ###########
 #  Setup  #
 ###########
-date_string=$(date --date "${date:-now}" +%Y.%m.%d)
+if ! date_string=$(date --date "${date:-now}" +%Y.%m.%d); then
+    echo "Invalid date ${date}"
+    exit 1
+fi
 destination="$destination_root/$date_string"
 
 previous_destination=$(\
@@ -109,7 +112,9 @@ if [[ -n $dry_run ]]; then
     echo "THIS IS A DRY RUN"
 fi
 
-echo "Identified $previous_destination as previous backup."
+if [[ -n $previous_destination ]]; then
+    echo "Identified $previous_destination as previous backup."
+fi
 
 echo "Estimating previous disk usage."
 usage_before=$(get_disk_usage "$destination_root")
