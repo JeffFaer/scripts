@@ -1,0 +1,4 @@
+src1/hardlinked dest/2019.01.01/src1/hardlinked
+src2/hardlinked dest/2019.01.01/src2/hardlinked
+src1/newfile
+src2/newfile

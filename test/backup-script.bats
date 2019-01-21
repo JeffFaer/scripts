@@ -7,6 +7,8 @@ run_golden_file_test() {
   local test_case=${1:-$BATS_TEST_DESCRIPTION}
   local test_case_dir="${BATS_TEST_DIRNAME}/backup-script/${test_case}"
 
+  [[ -d $test_case_dir ]]
+
   local IFS=$'\n'
   local paths_to_backup=( $(cat "${test_case_dir}/paths_to_backup") )
   unset IFS
@@ -27,15 +29,28 @@ run_golden_file_test() {
       local src_dirname=$(dirname "${path}")
 
       mkdir -p "${tmp_dir}/${src_dirname}"
-      cp -r "${src_path}" "${tmp_dir}/${src_dirname}"
+      cp -pr "${src_path}" "${tmp_dir}/${src_dirname}"
   done
 
   # Make dir to backup to.
   local dest_dir="${tmp_dir}/dest"
   if [[ -d "${test_case_dir}/initial-dest" ]]; then
-      cp -r "${test_case_dir}/initial-dest" "${dest_dir}"
+      cp -pr "${test_case_dir}/initial-dest" "${dest_dir}"
   else
       mkdir "${dest_dir}"
+  fi
+
+  # Setup mtimes.
+  if [[ -f "${test_case_dir}/mtimes" ]]; then
+      local first_mtime=$(date +%s)
+      while read line; do
+          local args=( $line )
+          local mtime=$((first_mtime++))
+          mtime="@${mtime}"
+          for f in "${args[@]}"; do
+              touch -m -d "$mtime" "${tmp_dir}/$f"
+          done
+      done < "${test_case_dir}/mtimes"
   fi
 
   (
@@ -84,4 +99,11 @@ assert_not_hardlinked() {
   assert_hardlinked '2019.01.01/src2/hardlinked' '2019.01.05/src2/hardlinked'
   assert_not_hardlinked '2019.01.05/src1/newfile'
   assert_not_hardlinked '2019.01.05/src2/newfile'
+}
+
+@test "previous-backup-copies-changed-files" {
+  run_golden_file_test
+
+  assert_hardlinked '2019.01.01/src/hardlinked' '2019.01.06/src/hardlinked'
+  assert_not_hardlinked '2019.01.06/src/changed'
 }

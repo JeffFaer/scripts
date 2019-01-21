@@ -1,0 +1,3 @@
+src/hardlinked dest/2019.01.01/src/hardlinked
+dest/2019.01.01/src/changed
+src/changed
