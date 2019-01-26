@@ -23,7 +23,7 @@ __TXN_MAPPING = {
         'txn_type': lambda d: TransactionType[d['Category'].upper()],
         'date': lambda d: datetime.strptime(d['Date'], __INPUT_DATE_FORMAT).date(),
         'description': itemgetter('Description'),
-        'amount': lambda d: d['Amount'].lstrip('$'),
+        'amount': lambda d: d['Amount'].lstrip('$').replace(',', ''),
         'security': itemgetter('Fund'),
         'quantity': itemgetter('Shares'),
 }
