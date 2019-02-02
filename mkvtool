@@ -223,10 +223,10 @@ def combine(vid_file, srt_files = [])
     #{srts.join(' ')}}
 
     if $?.success? then
+      FileUtils.mv(tmp.path, final_file)
+
       FileUtils.rm(vid_file)
       FileUtils.rm(srt_files)
-
-      FileUtils.mv(tmp.path, final_file)
     else
       puts output
     end
