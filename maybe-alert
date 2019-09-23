@@ -22,7 +22,7 @@ _alert() {
         local end=$(date +%s)
 
         local elapsed=$((end - begin))
-        if [[ $elapsed -ge $max ]]; then
+        if [[ $exit_status != 0 || $elapsed -ge $max ]]; then
             icon=$([[ $exit_status == 0 ]] && echo info || echo error)
             summary="Command took $(display-seconds $elapsed) to complete."
 
