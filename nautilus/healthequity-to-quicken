@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+files_to_cleanup=()
+_cleanup() {
+    rm -f "${files_to_cleanup[@]}"
+}
+trap _cleanup EXIT
+
+input="$1"
+output="${1%%.*}.ofx"
+
+
+if [[ $input = *.xls* ]]; then
+    tmp=$(mktemp --suffix .csv)
+    files_to_cleanup+=( "$tmp" )
+
+    if ! xls-to-csv "$input" "$tmp"; then
+        echo "Couldn't convert file to csv."
+        exit 1
+    fi
+
+    files_to_cleanup+=( "$input" )
+    input="$tmp"
+fi
+
+if [[ $input = *.csv ]]; then
+    if ! healthequity-to-quicken "$input" > "$output"; then
+        echo "Couldn't convert csv to ofx."
+        exit 1
+    fi
+
+    files_to_cleanup+=( "$input" )
+fi
