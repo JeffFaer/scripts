@@ -7,7 +7,7 @@
 # Copies an m3u file to a directory.
 # This script accounts for destinations that might be on gvfs.
 
-if [ -z "$1" ] || [ ! -f "$1" ]; then
+if [[ -z "$1" ]] || [[ ! -f "$1" ]]; then
     echo "Must provide valid m3u file."
     exit 1
 fi
@@ -17,7 +17,7 @@ fi
 check_for_art() {
     local f
     for f in {album,cover}.{jpg,png}; do
-        if [ -f "$1/$f" ]; then
+        if [[ -f "$1/$f" ]]; then
             echo "$1/$f"
             return
         fi
@@ -31,7 +31,7 @@ dir=$(dirname "$1")
 m3u_name=${1##*/}
 # Strip extension
 m3u_name=${m3u_name%.*}
-if [ "$#" -gt 1 ]; then
+if [[ "$#" -gt 1 ]]; then
     dest="$2"
 else
     dest="./$m3u_name"
@@ -45,7 +45,7 @@ if df -P -T "$dest" | tail -n +2 | awk '{print $2}' | grep -q gvfs; then
 fi
 
 copy() {
-    if [ $is_gvfs ]; then
+    if [[ $is_gvfs ]]; then
         gio copy -p "$@"
     else
         ln "$@" 2>/dev/null || cp "$@"
@@ -60,18 +60,20 @@ total=${#m3u_entries[@]}
 current=0
 for m3u_entry in "${m3u_entries[@]}"; do
     progress show $current $total
-    file=${dir}/${m3u_entry}
+
+    file="${dir}/${m3u_entry}"
     parents=$(dirname "$m3u_entry")
+
     new_location=${dest}/${parents}
 
     mkdir -p "$new_location"
     copy "$file" "$new_location"
 
     # check for album art
-    if [ -z "$(check_for_art "$new_location")" ]; then
+    if [[ -z "$(check_for_art "$new_location")" ]]; then
         file_dir=${dir}/${parents}
         art=$(check_for_art "$file_dir")
-        if [ -n "$art" ]; then
+        if [[ -n "$art" ]]; then
             copy "$art" "$new_location"
         fi
     fi
