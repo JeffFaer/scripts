@@ -1,7 +1,25 @@
 #!/usr/bin/env bash
 # Sends a command to all tmux panes in the current server.
 
-for pane in $(tmux list-panes -aF "#D"); do
-  tmux send-keys -t "${pane}" "$*"
-  tmux send-keys -t "${pane}" "Enter"
+IFS=$'\n'
+panes=( $(tmux list-panes -aF "#{pane_id} #{pane_current_command} #{session_name}.#{pane_index}") )
+unset IFS
+
+for pane in "${panes[@]}"; do
+  split=( $pane )
+  pane_id="${split[0]}"
+  cmd="${split[1]}"
+  name="${split[2]}"
+
+  resolved_cmd=$(which "$cmd")
+  if [[ $? != 0 ]]; then
+    echo "Skipping ${name}, couldn't which ${cmd}"
+    continue
+  fi
+  if [[ "${SHELL}" != "${resolved_cmd}" ]]; then
+    echo "Skipping ${name}, its executing ${cmd}"
+    continue
+  fi
+
+  tmux send-keys -t "${pane_id}" "$*" "Enter"
 done
