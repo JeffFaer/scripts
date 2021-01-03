@@ -9,7 +9,7 @@ usage() {
 }
 
 DEFAULT_PATHS_TO_BACKUP=(
-    "$HOME"
+    $(eval echo ~$(logname))
     /opt
     /etc
     /var/lib/plexmediaserver
