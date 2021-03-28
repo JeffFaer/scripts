@@ -12,13 +12,14 @@
 for file in "$@"; do
     dir=$(dirname "$file")
     file_name=$(basename "$file")
+    ext=${file#*.}
 
     next_episode=$(find "$dir" -maxdepth 1 -type f -name 'E[0-9][0-9]*' -not -name '*.mkv' | sort | head -1)
     next_episode_name=$(basename "$next_episode")
 
     if [[ -n $next_episode_name ]]; then
-        new_file="${next_episode}.mkv"
-        new_file_name="${next_episode_name}.mkv"
+        new_file="${next_episode}.${ext}"
+        new_file_name="${next_episode_name}.${ext}"
         echo "Renaming $file_name to $new_file_name"
 
         if [[ -f $new_file ]]; then
