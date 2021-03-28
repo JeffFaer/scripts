@@ -22,7 +22,7 @@ die() {
 # Combines a video file and zero or more subtitle titles into an mkv file.
 # $1: The video file to convert.
 # $2+: Subtitle files.
-mkvtool::combine() {
+mkvtool::to_mkv() {
   local video_file="$1"
   local subtitles=( "${@:2}" )
 
@@ -51,6 +51,10 @@ mkvtool::combine() {
           fi
       done
   done
+
+  if [[ "$video_file" = *.mkv && "${#subtitles[@]}" -eq 0 ]]; then
+      die "Video file is already an mkv, and there are no subtitles. There's nothing to do."
+  fi
 
   local result
   if [[ "$video_file" = *.mkv ]]; then
