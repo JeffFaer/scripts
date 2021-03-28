@@ -1,24 +1,3 @@
 #!/usr/bin/env bash
 
-# Takes any number of parameters.
-# The parameters are a mix of mkv file names and tag names.
-# If tag names are not present, list all tag names and values.
-#
-# Tags will be printed in the order they are encountered.
-
-files=()
-tags=()
-
-for param in "$@"; do
-    if [ -f "$param" ]; then
-        files+=( "$param" )
-    else
-        tags+=( "$param" )
-    fi
-done
-
-IFS=','
-all_tags="${tags[*]}"
-unset IFS
-
-mkvtool -r "$all_tags" "${files[@]}"
+mkvtool get_tags "$@"

@@ -1,426 +1,269 @@
-#!/usr/bin/env ruby
+#!/usr/bin/env bash
 
-require 'fileutils'
-require 'optparse'
-require 'ostruct'
-require 'rexml/document'
-require 'tempfile'
+_SUBTITLE_DIRS=( "." "./subs" "./subtitles" "./Subs" )
+_SUBTITLE_EXTENSIONS="(srt|ssa)$"
 
-require 'ruby-progressbar'
+warn() {
+    echo "$@" >&2
+}
 
-module Equality
-  def ==(other)
-    self.class == other.class and self.state == other.state
-  end
+die() {
+    warn "$@"
+    warn
 
-  def hash
-    state.hash
-  end
+    local i=0
+    while caller $i >&2; do
+        ((i++))
+    done
 
-  protected
-  def state()
-    self.instance_variables.map do |var|
-      self.instance_variable_get(var)
-    end
-  end
-end
+    exit 1
+}
 
-class Tags
-  include Equality
-  def initialize(tags = nil)
-    @tags = {}
+# Combines a video file and zero or more subtitle titles into an mkv file.
+# $1: The video file to convert.
+# $2+: Subtitle files.
+mkvtool::combine() {
+  local video_file="$1"
+  local subtitles=( "${@:2}" )
 
-    if not tags.nil? then
-      tags.each(&method(:<<))
-    end
-  end
+  local dir=$(dirname "$video_file")
+  local video_base=$(basename "$video_file")
+  video_base=${video_base%.*}
+  local srt_dir
+  for srt_dir in "${_SUBTITLE_DIRS[@]}"; do
+      local file
+      for file in "${dir}/${srt_dir}/"*; do
+          if [[ ! -f "$file" ]]; then
+              continue
+          fi
 
-  def +(tags)
-    new_tags = @tags.merge(tags.state[0])
-    return Tags.new(new_tags.values)
-  end
+          if [[ "$file" = /* ]]; then
+              file=$(realpath "$file")
+          else
+              file=$(realpath --relative-to "$PWD" "$file")
+          fi
 
-  def <<(tag)
-    @tags[tag.name.downcase.intern] = tag
-  end
+          local base=$(basename "$file")
 
-  def [](name)
-    @tags[name]
-  end
+          if [[ "$base" = "$video_base"* && "$file" =~ $_SUBTITLE_EXTENSIONS ]]; then
+              warn "Found subtitle file $file"
+              subtitles+=( "$file" )
+          fi
+      done
+  done
 
-  def to_s()
-    @tags.values.sort!.join("\n")
-  end
-
-  def to_xml()
-    xml = REXML::Element.new("Tags")
-    sub_xml = xml.add_element("Tag")
-    @tags.each_value do |tag|
-      sub_xml.add_element(tag.to_xml)
-    end
-
-    return xml
-  end
-end
-
-class SimpleTag
-  include Comparable
-  attr_accessor :name, :string
-  def initialize(name, string)
-    @name = name.upcase
-    @string = string
-  end
-
-  def <=>(other)
-    c = @name <=> other.name
-    if c == 0 then
-      c = @string <=> other.string
-    end
-
-    return c
-  end
-
-  def value
-    @string
-  end
-
-  def to_s()
-    "#{@name}=#{@string}"
-  end
-
-  def to_xml()
-    tag = REXML::Element.new("Simple")
-
-    self.instance_variables.each do |var|
-      name = var.to_s
-      name[0] = ''
-      name[0] = name[0].upcase
-
-      value = self.instance_variable_get(var)
-
-      child = tag.add_element(name)
-      child.text = value
-    end
-
-    return tag
-  end
-end
-
-def puts(*args)
-  if $PROGRESS.nil? then
-    Kernel.puts(*args)
+  local result
+  if [[ "$video_file" = *.mkv ]]; then
+      result="${video_file%.*}_combined.mkv"
   else
-    $PROGRESS.log(*args)
-  end
-end
+      result="${video_file%.*}.mkv"
+  fi
 
-def get_tags(mkv_file)
-  raw_xml = %x(mkvextract tags "#{mkv_file}")
-  xml = REXML::Document.new raw_xml
+  local mkvmerge=(
+    mkvmerge
+    --default-language eng
+    -o "$result"
+    "$video_file"
+  )
 
-  tags = Tags.new
-  xml.elements.each("//Simple") do |tag|
-    name_tag = tag.get_elements("Name")[0]
-    string_tag = tag.get_elements("String")[0]
-    if not name_tag.nil? and not string_tag.nil? then
-      name = name_tag.text
-      value = string_tag.text
+  local subtitle
+  for subtitle in "${subtitles[@]}"; do
+      if [[ "$subtitle" =~ _([a-zA-Z]+)\.[^/]+$ ]]; then
+          mkvmerge+=( --language "0:${BASH_REMATCH[1]}" )
+      fi
+      mkvmerge+=( "$subtitle" )
+  done
 
-      tags << SimpleTag.new(name, value)
-    else
-      puts "Invalid SimpleTag: #{tag}"
-    end
-  end
+  echo "Attempting to create ${result}..."
 
-  return tags
-end
+  local out
+  out=$("${mkvmerge[@]}")
+  if [[ $? != 0 ]]; then
+      echo "Error while combining video file:" >&2
+      echo
+      echo "$out" >&2
+      return 1
+  fi
 
-def set_tags(mkv_file, tags)
-  title = tags[:title].value
+  local rm=(rm "$video_file" "${subtitles[@]}")
 
-  tmp = Tempfile.new('tags')
-  begin
-    tmp.write(tags.to_xml)
-    tmp.flush
+  echo "Successfully created ${result}!"
+  echo
+  echo "Execute the following to remove old files:"
+  printf "%q " "${rm[@]}"
+  echo
+}
 
-    %x{mkvpropedit "#{mkv_file}" -e info -s "title=#{title}" \
-    --tags global:#{tmp.path}}
-  ensure
-    tmp.close
-    tmp.unlink
-  end
-end
+# Prints the tags of an mkv file.
+# $1: MKV file.
+mkvtool::get_tags() {
+  [[ $# == 1 ]] || die "Only exected one argument: file"
+  local mkv_file="$1"
+  [[ "$mkv_file" == *.mkv ]] || die "get_tags only works on mkv files."
 
-def parse_filename_for_tags(mkv_file)
-  tags = Tags.new
-  base = File.basename(mkv_file, '.mkv')
+  local xml="$(mkvextract tags "$mkv_file")"
 
-  part_number = nil
-  title = nil
-  date_released = nil
+  local i=1
+  local tags
+  declare -A tags
+  local tag_order=()
+  local tag
+  while true; do
+      tag=$(xpath -q -e "//Tag[last()]//Simple[$i]" <<< "$xml")
+      if [[ -z "$tag" ]]; then
+          break
+      fi
 
-  tv_show = /E(?<part_number>[\d.]+)(?:,\d+)? - (?<title>.+)/
-  movie = /(?:(?<part_number>\d+)\. )?(?<title>[^_]+)(?:_(?<date_released>\d+))?/
-  match = base.match(tv_show)
-  if match.nil? then
-    match = base.match(movie)
+      local name=$(xpath -q -e "/Simple/Name/text()" <<< "$tag")
+      local value=$(xpath -q -e "/Simple/String/text()" <<< "$tag")
+      if [[ -n "${tags[$name]}" ]]; then
+          warn "Tag \"$name\" is duplicated."
+          tags[$name]+=",$value"
+      else
+          tags[$name]=$value
+          tag_order+=( "$name" )
+      fi
 
-    if (match.names.include? "date_released" and
-        not match["date_released"].nil?) then
-      underscore_index = base.rindex('_')
-      new_name = base[0...underscore_index] + '.mkv'
-      dir = File.dirname(mkv_file)
-      new_file = File.expand_path(new_name, dir)
-      FileUtils.move(mkv_file, new_file)
-      mkv_file = new_file
-    end
-  end
+      ((i++))
+  done
 
-  for tag in ["part_number", "title", "date_released"] do
-    if match.names.include? tag and not match[tag].nil? then
-      tags << SimpleTag.new(tag, match[tag])
-    end
-  end
+  local tag
+  for tag in "${tag_order[@]}"; do
+      echo "${tag}=${tags[$tag]}"
+  done
+}
 
-  return tags, mkv_file
-end
+# Parses the filename of an mkv file and updates its tags.
+# $1: MKV file.
+mkvtool::update_tags() {
+  [[ $# == 1 ]] || die "Only exected one argument: file"
+  local mkv_file="$1"
+  [[ "$mkv_file" == *.mkv ]] || die "update_tags only works on mkv files."
 
-def get_srt_files(vid_file, dirs)
-  base_dir = File.dirname(vid_file)
-  base = File.basename(vid_file)
-  base = base[0, base.rindex('.')]
+  local tv_show="E0+?([0-9]+) - (.+)\."
+  local movie="((0+?([0-9]+)\. )?([^_]+))(_([0-9]+))?\."
 
-  matches = []
-
-  dirs.each do |dir|
-    dir = File.expand_path(dir, base_dir)
-    glob = File.expand_path("#{escape_glob(base)}*.srt", escape_glob(dir))
-    matches += Dir.glob(glob)
-  end
-
-  return matches
-end
-
-def escape_glob(s)
-  s.gsub(/[\\\{\}\[\]\*\?]/) { |x| "\\"+x }
-end
-
-def combine(vid_file, srt_files = [])
-  srts = []
-  srt_files.each do |srt|
-    base_srt = File.basename(srt, '.srt')
-    if base_srt =~ /_(\w+)$/ then
-      srts << "--language"
-      srts << "0:#{$1}"
-    end
-    srts << "\"#{srt}\""
-  end
-  final_file = vid_file[0, vid_file.rindex('.')] + '.mkv'
-
-  tmp = Tempfile.new('')
-  begin
-    output = %x{mkvmerge --default-language eng -o "#{tmp.path}" "#{vid_file}" \
-    #{srts.join(' ')}}
-
-    if $?.success? then
-      FileUtils.mv(tmp.path, final_file)
-
-      FileUtils.rm(vid_file)
-      FileUtils.rm(srt_files)
-    else
-      puts output
-    end
-  ensure
-    tmp.close
-    tmp.unlink
-  end
-end
-
-def extract_srt_files(vid_file)
-  extension = vid_file[/\.\w+$/]
-  case extension
-  when ".mp4", ".m4v"
-    subtitles = parse_mp4_subtitle_tracks(vid_file)
-    root = vid_file[0, vid_file.rindex('.')]
-
-    srt_files = []
-
-    subtitles.each do |lang, track|
-      srt_file = "#{root}_#{lang}.srt"
-      File.open(srt_file, 'w') do |file|
-        file.write(%x{MP4Box "#{vid_file}" -srt #{track} -std 2>#{$LOG}})
-        srt_files << srt_file
-      end
-    end
-
-    return srt_files
+  local new_file_name
+  local part_number
+  local title
+  local date_released
+  if [[ "$mkv_file" =~ $tv_show ]]; then
+      part_number=${BASH_REMATCH[1]}
+      title=${BASH_REMATCH[2]}
+  elif [[ "$mkv_file" =~ $movie ]]; then
+      new_file_name=${BASH_REMATCH[1]}
+      part_number=${BASH_REMATCH[3]}
+      title=${BASH_REMATCH[4]}
+      date_released=${BASH_REMATCH[6]}
   else
-    return []
-  end
-end
+      die "Video file isn't in a known format: $mkv_file"
+  fi
 
-def parse_mp4_subtitle_tracks(mp4_file)
-  languages = create_language_map()
-  # Language => Track Number
-  subtitles = {}
+  local tags=()
+  local tag
+  local value
+  for tag in "part_number" "title" "date_released"; do
+      value=${!tag}
+      if [[ -n "$value" ]]; then
+          tags+=( "$tag" "$value" )
+      fi
+  done
 
-  track_number = nil
-  language = nil
-  %x{MP4Box -info "#{mp4_file}" 2>&1}.each_line do |line|
-    case line
-    when /TrackID (\d+)/
-      track_number = $1.to_i
-    when /Language "([^"]+)" - Type "(\w+):(\w+)"/
-      language = languages[$1]
-      if $2 == "sbtl" then
-        subtitles[language] = track_number
-      end
-    when /Timed Text/
-      subtitles[language] = track_number
-    end
-  end
+  mkvtool::set_tags "$mkv_file" "${tags[@]}"
+  if [[ $? != 0 ]]; then
+      return 1
+  fi
 
-  return subtitles
-end
+  if [[ -n "$new_file_name" ]]; then
+      local file_name=$(basename "$mkv_file")
+      new_file_name+=".mkv"
 
-def create_language_map()
-  languages = %x{MP4Box -languages 2>&1 | tail -n+3}
-  langs = { "Undetermined" => "und" }
-  langs.default = "und"
-  languages.each_line do |line|
-    if line =~ /^(.+) \((\w{3}) - \w{2}?\)$/ then
-      $1.split(";").each do |lang|
-        langs[lang.chomp] = $2
-      end
-    else
-      puts "Unknown line #{line}"
-    end
-  end
+      if [[ "$file_name" != "$new_file_name" ]]; then
+          local dest="$(dirname "$mkv_file")/$new_file_name"
+          warn "Renaming $mkv_file -> $dest"
 
-  return langs
-end
+          mv -i "$mkv_file" "$dest"
+      fi
+  fi
+}
 
-$LOG = "/dev/null"
-options = OpenStruct.new
-options.read_tags = false
+# Sets tags on the given MKV file without overriding other tags.
+# $1: MKV file.
+# $2: Tag name
+# $3: Tag value
+# $4: Tag name
+# $5: Tag value
+# .
+# .
+# .
+mkvtool::set_tags() {
+  [[ $(( $# % 2)) == 1 ]] || die "Expected an odd number of arguments. Did you remember to specify a value for each tag?"
+  local mkv_file="$1"
+  [[ "$mkv_file" == *.mkv ]] || die "set_tags only works on mkv files."
+  local wanted_tags=( "${@:2}" )
+  if [[ "${#wanted_tags[@]}" -eq 0 ]]; then
+      return
+  fi
 
-options.parse_filenames = false
-options.parse_transform = {}
+  local wanted_tags_xml
+  local selector
+  local title
 
-options.combine = false
-options.srt_dirs = [ ".", "./subs/", "./subtitles/", "./Subs" ]
+  local tag
+  local value
+  local i
+  for i in $(seq 0 $((${#wanted_tags[@]} / 2 - 1))); do
+      tag=${wanted_tags[i*2]^^}
+      value=${wanted_tags[i*2+1]}
 
-options.convert = false
+      if [[ "$tag" == "TITLE" ]]; then
+          title=$value
+      fi
 
-OptionParser.new do |opts|
-  opts.banner = "Usage: #{$PROGRAM_NAME} [options] video_files+"
+      wanted_tags_xml+="
+<Simple>
+  <Name>${tag}</Name>
+  <String>${value}</String>
+</Simple>"
 
-  opts.on('-r', '--read-tags [tag1,tag2,...]', Array,
-          "Read tags from the given video files.") do |tags|
-    options.read_tags = true
-    options.tags = tags || []
-    options.tags.sort!
-  end
+      if [[ -n "$selector" ]]; then
+          selector+=" and "
+      fi
+      selector+="not(Name[translate(text(), 'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ')=\"${tag}\"])"
+  done
 
-  opts.on('-p', '--parse-file-names', "Parse filenames for tags.") do |p|
-    options.parse_filenames = true
-  end
+  local xml="$(mkvextract tags "$mkv_file")"
+  local existing_tags_xml=$(xpath -q -e "//Tag[last()]//Simple[$selector]" <<< "$xml")
 
-  opts.on('-t', '--transform-title [in]/[out]',
-          "Transform titles that are parsed using tr") do |a|
-    input, output = a.split("/")
-    input.chars.zip(output.chars).each do |i,o|
-      options.parse_transform[i] = o
-    end
-  end
+  local new_xml="
+<Tags>
+  <Tag>
+    ${existing_tags_xml}
+    ${wanted_tags_xml}
+  </Tag>
+</Tags>"
 
-  opts.on('-s', '--combine-subtitles',
-          "Look for srt files for the given video files.") do |s|
-    options.combine = true
-  end
+  local new_xml_file=$(mktemp)
+  echo "$new_xml" > "$new_xml_file"
 
-  opts.on('-c', '--convert-to-mkv',
-          "Convert given video files to mkv.") do |c|
-    options.convert = true
-  end
+  mkvpropedit=(
+      mkvpropedit "$mkv_file" --tags "global:$new_xml_file"
+  )
+  if [[ -n "$title" ]]; then
+      mkvpropedit+=( -e info -s "title=${title}" )
+  fi
 
-end.parse!
+  "${mkvpropedit[@]}"
+  local ret=$?
 
-if options.read_tags and options.tags.size == 1 and
-  File.exists?(options.tags[0]) then
-  ARGV.insert(0, options.tags[0])
-  options.tags = []
-end
+  rm "$new_xml_file"
 
-ARGV.delete_if(&File.method(:directory?))
+  return $ret
+}
 
-if options.convert then
-  $PROGRESS = ProgressBar.create(:title => "Converting", :total => ARGV.size)
-  ARGV.each do |file|
-    puts file
+command="$1"
+if [[ $(type -t "mkvtool::$command") != "function" ]]; then
+    die "Unknown command: $command"
+fi
 
-    srt_files = extract_srt_files(file)
-    combine(file, srt_files)
-
-    $PROGRESS.increment
-  end
-end
-
-if options.combine then
-  $PROGRESS = ProgressBar.create(:title => "Combining", :total => ARGV.size)
-  errors = []
-  ARGV.each do |file|
-    puts file
-
-    srt_files = get_srt_files(file, options.srt_dirs)
-    puts "Found : #{srt_files}"
-
-    if not srt_files.empty? then
-      combine(file, srt_files)
-    else
-      errors << "Could not find srt for #{file}"
-    end
-
-    $PROGRESS.increment
-  end
-
-  puts errors
-end
-
-if options.parse_filenames then
-  $PROGRESS = ProgressBar.create(:title => "Parsing", :total => ARGV.size)
-  ARGV.each do |file|
-
-    old_tags = get_tags(file)
-    new_tags,file = parse_filename_for_tags(file)
-    options.parse_transform.each do |i,o|
-      new_tags[:title].value.sub!(i, o)
-    end
-
-    all_tags = old_tags + new_tags
-    if all_tags != old_tags then
-      puts file
-      set_tags(file, all_tags)
-    end
-
-    $PROGRESS.increment
-  end
-end
-
-if options.read_tags then
-  ARGV.each do |file|
-    puts file if ARGV.size > 1
-    tab = ARGV.size > 1 ? "\t" : ""
-
-    tags = get_tags(file)
-    if options.tags.empty? then
-      get_tags(file).to_s.each_line do |line|
-        puts "#{tab}#{line}"
-      end
-    else
-      options.tags.each do |tag|
-        puts "#{tab}#{tags[tag.downcase.intern].value}"
-      end
-    end
-  end
-end
+"mkvtool::$command" "${@:2}"
