@@ -83,9 +83,9 @@ mkvtool::to_mkv() {
   local out
   out=$("${mkvmerge[@]}")
   if [[ $? != 0 ]]; then
-      echo "Error while combining video file:" >&2
-      echo
-      echo "$out" >&2
+      warn "Error while combining video file:"
+      warn
+      warn "$out"
       return 1
   fi
 
@@ -108,33 +108,22 @@ mkvtool::get_tags() {
   local xml="$(mkvextract tags "$mkv_file")"
 
   local i=1
-  local tags
-  declare -A tags
-  local tag_order=()
+  local tags=()
   local tag
   while true; do
-      tag=$(xpath -q -e "//Tag[last()]//Simple[$i]" <<< "$xml")
-      if [[ -z "$tag" ]]; then
+      tag=$(xpath -q -e "concat(//Tag[last()]//Simple[$i]/Name/text(), '=', //Tag[last()]//Simple[$i]/String/text())" <<< "$xml")
+      if [[ "$tag" == "=" ]]; then
           break
       fi
 
-      local name=$(xpath -q -e "/Simple/Name/text()" <<< "$tag")
-      local value=$(xpath -q -e "/Simple/String/text()" <<< "$tag")
-      if [[ -n "${tags[$name]}" ]]; then
-          warn "Tag \"$name\" is duplicated."
-          tags[$name]+=",$value"
-      else
-          tags[$name]=$value
-          tag_order+=( "$name" )
-      fi
+      tags+=( "$tag" )
 
       ((i++))
   done
 
-  local tag
-  for tag in "${tag_order[@]}"; do
-      echo "${tag}=${tags[$tag]}"
-  done
+  local IFS=$'\n'
+  echo "${tags[*]}"
+  unset IFS
 }
 
 # Parses the filename of an mkv file and updates its tags.
