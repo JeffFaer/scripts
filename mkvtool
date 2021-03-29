@@ -12,11 +12,21 @@ die() {
     warn
 
     local i=0
-    while caller $i >&2; do
+    while caller $i; do
         ((i++))
+    done | while read line func file; do
+      warn -e "${file}:${line}\t${func}"
     done
 
     exit 1
+}
+
+# Ensures that $1 exists and is a file that ends with .mkv
+mkvtool::_ensure_mkv() {
+  [[ $# == 1 ]] || die "Only exected one argument: file"
+  local mkv_file="$1"
+  [[ "$mkv_file" == *.mkv ]] || die "get_tags only works on mkv files."
+  [[ -f "$mkv_file" ]] || die "File does not exist: $mkv_file"
 }
 
 # Combines a video file and zero or more subtitle titles into an mkv file.
@@ -103,15 +113,23 @@ mkvtool::to_mkv() {
 mkvtool::get_tags() {
   [[ $# == 1 ]] || die "Only exected one argument: file"
   local mkv_file="$1"
-  [[ "$mkv_file" == *.mkv ]] || die "get_tags only works on mkv files."
+  mkvtool::_ensure_mkv "$mkv_file"
 
-  local xml="$(mkvextract tags "$mkv_file")"
+  local xml
+  xml="$(mkvextract tags "$mkv_file")"
+  if [[ $? != 0 ]]; then
+      die "Could not read tags from ${mkv_file}: ${xml}"
+  fi
+
 
   local i=1
   local tags=()
   local tag
   while true; do
       tag=$(xpath -q -e "concat(//Tag[last()]//Simple[$i]/Name/text(), '=', //Tag[last()]//Simple[$i]/String/text())" <<< "$xml")
+      if [[ $? != 0 ]]; then
+          die "Could not extract tag from ${mkv_file}: $tag"
+      fi
       if [[ "$tag" == "=" ]]; then
           break
       fi
@@ -131,7 +149,7 @@ mkvtool::get_tags() {
 mkvtool::update_tags() {
   [[ $# == 1 ]] || die "Only exected one argument: file"
   local mkv_file="$1"
-  [[ "$mkv_file" == *.mkv ]] || die "update_tags only works on mkv files."
+  mkvtool::_ensure_mkv "$mkv_file"
 
   local tv_show="E0+?([0-9]+) - (.+)\."
   local movie="((0+?([0-9]+)\. )?([^_]+))(_([0-9]+))?\."
@@ -192,7 +210,8 @@ mkvtool::update_tags() {
 mkvtool::set_tags() {
   [[ $(( $# % 2)) == 1 ]] || die "Expected an odd number of arguments. Did you remember to specify a value for each tag?"
   local mkv_file="$1"
-  [[ "$mkv_file" == *.mkv ]] || die "set_tags only works on mkv files."
+  mkvtool::_ensure_mkv "$mkv_file"
+
   local wanted_tags=( "${@:2}" )
   if [[ "${#wanted_tags[@]}" -eq 0 ]]; then
       return
@@ -225,8 +244,17 @@ mkvtool::set_tags() {
       selector+="not(Name[translate(text(), 'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ')=\"${tag}\"])"
   done
 
-  local xml="$(mkvextract tags "$mkv_file")"
-  local existing_tags_xml=$(xpath -q -e "//Tag[last()]//Simple[$selector]" <<< "$xml")
+  local xml
+  xml="$(mkvextract tags "$mkv_file")"
+  if [[ $? != 0 ]]; then
+      die "Could not read tags from ${mkv_file}: ${xml}"
+  fi
+
+  local existing_tags_xml
+  existing_tags_xml=$(xpath -q -e "//Tag[last()]//Simple[$selector]" <<< "$xml")
+  if [[ $? != 0 ]]; then
+      die "Could not extract existing tags from ${mkv_file}: ${existing_tags_xml}"
+  fi
 
   local new_xml="
 <Tags>
