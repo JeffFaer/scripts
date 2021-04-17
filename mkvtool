@@ -106,6 +106,9 @@ mkvtool::to_mkv() {
   echo "Execute the following to remove old files:"
   printf "%q " "${rm[@]}"
   echo
+  if user_permission "Execute command?"; then
+      "${rm[@]}"
+  fi
 }
 
 # Prints the tags of an mkv file.
