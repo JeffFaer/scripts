@@ -254,9 +254,13 @@ mkvtool::set_tags() {
   fi
 
   local existing_tags_xml
-  existing_tags_xml=$(xpath -q -e "//Tag[last()]//Simple[$selector]" <<< "$xml")
-  if [[ $? != 0 ]]; then
-      die "Could not extract existing tags from ${mkv_file}: ${existing_tags_xml}"
+  if [[ -z "$xml" ]]; then
+      existing_tags_xml=""
+  else
+      existing_tags_xml=$(xpath -q -e "//Tag[last()]//Simple[$selector]" <<< "$xml")
+      if [[ $? != 0 ]]; then
+          die "Could not extract existing tags from ${mkv_file}: ${existing_tags_xml}"
+      fi
   fi
 
   local new_xml="
