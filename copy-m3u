@@ -1,11 +1,46 @@
 #!/usr/bin/env bash
-
 # $1: An m3u file.
 # $2?: The destination directory. If not given, this script will create a
 #      directory with the same name as the m3u file.
 #
 # Copies an m3u file to a directory.
 # This script accounts for destinations that might be on gvfs.
+
+# This function has two forms:
+# progress clear
+#   - Clears the progress bar from the output line
+# progress show MIN MAX
+#   - Shows the progress bar MIN/MAX percent complete.
+#
+# You do not need to clear before showing twice in a row.
+progress() {
+    local action=$1
+
+    local length=50
+    if [[ $action == show ]]; then
+        local current=$2
+        local max=$3
+        local progress=$(bc -l <<< "$length * $current / $max")
+        progress=$(printf "%.0f" $progress)
+        local to_complete
+        let to_complete=$length-$progress
+
+        local fill=$(printf "%${progress}s")
+        local empty=$(printf "%${to_complete}s")
+
+        printf "\r${fill// /\#}${empty// /-}"
+    elif [[ $action == clear ]]; then
+        for i in $(seq 1 $length); do
+            printf "\b"
+        done
+        for i in $(seq 1 $length); do
+            printf " "
+        done
+        for i in $(seq 1 $length); do
+            printf "\b"
+        done
+    fi
+}
 
 if [[ -z "$1" ]] || [[ ! -f "$1" ]]; then
     echo "Must provide valid m3u file."
