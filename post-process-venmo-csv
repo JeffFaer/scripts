@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+contents="$(cat "$1")"
+sed -nre '/^,.*/p' <<< "$contents" | head -n-1 > "$1"
