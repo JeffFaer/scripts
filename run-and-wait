@@ -7,7 +7,7 @@
 i=1
 length=0
 for element in "$@"; do
-    if [ ";" == "$element" ]; then
+    if [[ ";" == "$element" ]]; then
         "${@:i:length}"
         ((i += length))
         ((i++))
@@ -17,7 +17,7 @@ for element in "$@"; do
     fi
 done
 
-if [ "$length" -gt "0" ]; then
+if [[ "$length" -gt "0" ]]; then
     "${@:i:length}"
 fi
 
