@@ -14,7 +14,7 @@ for file in "$@"; do
     file_name=$(basename "$file")
     ext=${file##*.}
 
-    next_episode=$(find "$dir" -maxdepth 1 -type f -name 'E[0-9][0-9]*' -not -name "*.*" | sort | head -1)
+    next_episode=$(find "$dir" -maxdepth 1 -type f -name 'E[0-9][0-9]*' -not -name "*.${ext}" | sort | head -1)
     next_episode_name=$(basename "$next_episode")
 
     if [[ -n $next_episode_name ]]; then
