@@ -5,6 +5,7 @@ usage() {
     echo "--date                defaults to today"
     echo "--destination-root    defaults to \$PWD ($PWD)"
     echo "--dry-run"
+    echo "--list-only"
     exit 1
 }
 
@@ -27,10 +28,6 @@ get_previous_destination() {
         | head -1
 }
 
-get_package_list() {
-    dpkg -l
-}
-
 get_disk_usage() {
     du -sB1 "$1" | cut -f1
 }
@@ -39,13 +36,18 @@ get_disk_usage() {
 #  Parse Arguments  #
 #####################
 
-opts=$(getopt -o 'h' --long 'help,date:,destination-root:,dry-run,' -n "$0" -- "$@")
+opts=$(getopt -o 'h' --long 'help,date:,destination-root:,dry-run,list-only' -n "$0" -- "$@")
 exit_code=$?
-if [[ $exit_code != 0 ]]; then
-    echo "Error parsing options: $opts"
+if [[ ${exit_code} != 0 ]]; then
+    echo "Error parsing options: ${opts}"
     exit 1
 fi
-eval set -- "$opts"
+eval set -- "${opts}"
+
+date=now
+destination_root=$PWD
+dry_run=
+list_only=
 
 while true; do
     case "$1" in
@@ -57,8 +59,8 @@ while true; do
             usage
             ;;
         --date)
-            if [[ -n $2 ]]; then
-                date=$2
+            if [[ -n "$2" ]]; then
+                date="$2"
             fi
             shift 2
             ;;
@@ -72,19 +74,15 @@ while true; do
             dry_run=1
             shift
             ;;
+        --list-only)
+            list_only=1
+            shift
+            ;;
         *)
             echo "Unrecognized option: $1"
             exit 1
     esac
 done
-
-if [[ -z $date ]]; then
-    date=now
-fi
-
-if [[ -z $destination_root ]]; then
-    destination_root=$PWD
-fi
 
 if [[ $# -gt 0 ]]; then
     paths_to_backup=( "$@" )
@@ -99,57 +97,68 @@ if ! date_string=$(date --date "${date}" +%Y.%m.%d); then
     echo "Invalid date ${date}"
     exit 1
 fi
-destination="$destination_root/$date_string"
+destination="${destination_root}/${date_string}"
 
 previous_destination=$(\
-    get_previous_destination "$destination_root" "$destination")
+    get_previous_destination "${destination_root}" "${destination}")
 
-mkdir -p "$destination"
-exec &> >(tee -ia "$destination/log")
+mkdir -p "${destination}"
+exec &> >(tee -ia "${destination}/log")
 
 ################
 #  Processing  #
 ################
 
 echo "Starting at $(date)"
-if [[ -n $dry_run ]]; then
+if [[ -n "${dry_run}" ]]; then
     echo "THIS IS A DRY RUN"
 fi
 
-if [[ -n $previous_destination ]]; then
-    echo "Identified $previous_destination as previous backup."
+if [[ -n "${previous_destination}" ]]; then
+    echo "Identified ${previous_destination} as previous backup."
 fi
 
 echo "Estimating previous disk usage."
-usage_before=$(get_disk_usage "$destination_root")
+usage_before=$(get_disk_usage "${destination_root}")
 
-echo "Getting package list -> $destination/packages.txt"
-get_package_list > "$destination/packages.txt"
+echo "Getting package list -> ${destination}/packages.dpkg"
+dpkg -l > "${destination}/packages.dpkg"
 
-rsync_flags=(
-  --archive
-  --hard-links
-  --human-readable
-  --verbose
-  --progress
-  --relative
-  --filter ':- .backup_exclude'
-)
-if [[ -n $dry_run ]]; then
-    rsync_flags+=( --dry-run )
+if [[ -n "${list_only}" ]]; then
+    for path in "${paths_to_backup[@]}"; do
+        cmd=(ls -R "${path}")
+        echo "${cmd[*]}"
+        "${cmd[@]}" > "${destination}/${path//\//_}.ls"
+    done
+else
+    cmd=(rsync)
+    cmd+=(
+      --archive
+      --hard-links
+      --human-readable
+      --verbose
+      --progress
+      --relative
+      --filter ':- .backup_exclude'
+    )
+    if [[ -n "${dry_run}" ]]; then
+        cmd+=( --dry-run )
+    fi
+    if [[ -n "${previous_destination}" ]]; then
+        cmd+=( --link-dest "${previous_destination}" )
+    fi
+    cmd+=( "${paths_to_backup[@]}" "${destination}" )
+
+    echo "${cmd[*]}"
+    "${cmd[@]}"
 fi
-if [[ -n $previous_destination ]]; then
-    rsync_flags+=( --link-dest "$previous_destination" )
-fi
 
-echo "rsync ${rsync_flags[*]} ${paths_to_backup[*]} ${destination}"
-rsync "${rsync_flags[@]}" "${paths_to_backup[@]}" "${destination}"
 
 echo "Estimating incremental disk usage."
-usage_after=$(get_disk_usage "$destination_root")
+usage_after=$(get_disk_usage "${destination_root}")
 usage_diff=$((usage_after - usage_before))
 
-human_usage_diff=$(numfmt --to=iec-i --suffix=B "$usage_diff")
-echo "Used $human_usage_diff"
+human_usage_diff=$(numfmt --to=iec-i --suffix=B "${usage_diff}")
+echo "Used ${human_usage_diff}"
 
 echo "Ended at $(date)"
