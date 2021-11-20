@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# Utilities to make managing a Unifi Security Gateway a little easier.
+#
+# 1. $ usg dump > config.json
+# 2. Make changes to USG
+# 3. $ usg diff config.json
+# 4. $ usg patch config.json default
+# 5. Force provisioning in the Unifi UI
+# 6. In USG:
+#   - configure
+#   - set system host-name foo
+#   - set system host-name <original-value>
+#   - commit; save; exit
+# 7. $ usg diff config.json
+# 8. The previous usg diff fields show show up again, in addition to
+#    unifi.mgmt.cfgversion.
+#
+
+# ssh arguments to connect to the USG and the UniFi Controller. The arguments
+# should be escaped, if necessary.
+USG_CONNECTION="${USG_CONNECTION:-router}"
+CONTROLLER_CONNECTION="${CONTROLLER_CONNECTION:-unifi}"
+
+# https://github.com/josephburnett/jd
+# Currently relying on my forked version:
+# go get github.com/JeffreyFalgout/jd
+jd="${GOBIN:-"${GOPATH}/bin"}/jd"
+
+die() {
+    echo "$@" 1>&2
+    exit 1
+}
+
+usg::dump() {
+    [[ $# -eq 0 ]] || die "dump does not take any arguments."
+
+    ssh -o loglevel=ERROR ${USG_CONNECTION} -- \
+        mca-ctrl -t dump-cfg
+}
+
+usg::diff() {
+    [[ $# -eq 1 ]] || die "diff takes exactly one argument: old config"
+    local old="$1"
+
+    "${jd}" "${old}" <(usg::dump)
+}
+
+usg::patch(){
+    [[ $# -eq 2 ]] || die "patch takes exactly two arguments: old config, site name"
+    local old="$1"
+    local site="$2"
+
+    local patch
+    local ret
+    patch=$(usg::diff "${old}")
+    ret=$?
+    if [[ "${ret}" == 1 || ("${ret}" == 0 && -z "${patch}") ]]; then
+        die "${old} appears to be the same as what's currently uploadedto the USG. There's nothing to do!"
+    fi
+    if [[ "${ret}" != 0  ]]; then
+        die "diffing failed."
+    fi
+
+    local controller_config_remote_path="/srv/unifi/data/sites/${site}/config.gateway.json"
+    local controller_config
+    controller_config="$(ssh ${CONTROLLER_CONNECTION} -- \
+        cat "${controller_config_remote_path}")"
+    if [[ $? != 0 ]]; then
+        die "Could not find controller's config.gateway.json"
+    fi
+
+    echo
+    echo "Patch:"
+    echo
+    echo "${patch}"
+    echo
+
+    echo
+    echo "Current config.gateway.json:"
+    echo
+    echo "${controller_config}"
+    echo
+
+    local patched
+    local ret
+    patched="$("${jd}" -p -populate <(echo "${patch}") <(echo "${controller_config}"))"
+    ret=$?
+    if [[ "${ret}" != 0 && "${ret}" != 1 ]]; then
+        die "Could not apply patch to controller's config.gateway.json."
+    fi
+
+    echo
+    echo "New config.gateway.json:"
+    echo
+    echo "${patched}"
+    echo
+
+    if user_permission "Do you want to commit these changes?"; then
+        ssh ${CONTROLLER_CONNECTION} -- \
+            cp "${controller_config_remote_path}" \
+               "${controller_config_remote_path}.old"
+        if [[ $? != 0 ]]; then
+            die "Failed to backup existing config.gateway.json."
+        fi
+
+        ssh ${CONTROLLER_CONNECTION} -- \
+            echo $(printf "%q" "${patched}") ">" "${controller_config_remote_path}"
+        if  [[ $? != 0 ]]; then
+            die "Something went wrong uploading the patched config.gateway.json"
+        fi
+
+        # TODO: Automatically force provision the USG, then diff against the
+        # expected state. Rollback if something went wrong.
+    fi
+}
+
+# TODO: usg::rollback to copy config.gateway.json.old to config.gateway.json?
+
+if [[ "$(type -t "usg::$1")" != "function" ]]; then
+    echo "Unknown command $1"
+    exit 1
+fi
+
+"usg::$1" "${@:2}"
