@@ -104,7 +104,7 @@ usg::patch(){
         fi
 
         ssh ${CONTROLLER_CONNECTION} -- \
-            echo $(printf "%q" "${patched}") ">" "${controller_config_remote_path}"
+            "cat > \"${controller_config_remote_path}\"" <<< "${patched}"
         if  [[ $? != 0 ]]; then
             die "Something went wrong uploading the patched config.gateway.json"
         fi
@@ -125,6 +125,7 @@ usg::rollback() {
     if [[ $? != 0 ]]; then
         die "Something went wrong making a backup of the existing config.gateway.json"
     fi
+
     ssh ${CONTROLLER_CONNECTION} -- \
         cp "${controller_config_remote_path}.old" \
            "${controller_config_remote_path}"
