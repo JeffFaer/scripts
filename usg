@@ -54,10 +54,10 @@ usg::patch(){
     local ret
     patch=$(usg::diff "${old}")
     ret=$?
-    if [[ "${ret}" == 1 || ("${ret}" == 0 && -z "${patch}") ]]; then
-        die "${old} appears to be the same as what's currently uploadedto the USG. There's nothing to do!"
+    if [[ ("${ret}" == 0 && -z "${patch}") ]]; then
+        die "${old} appears to be the same as what's currently uploaded to the USG. There's nothing to do!"
     fi
-    if [[ "${ret}" != 0  ]]; then
+    if [[ "${ret}" != 1  ]]; then
         die "diffing failed."
     fi
 
