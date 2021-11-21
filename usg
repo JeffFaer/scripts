@@ -26,11 +26,19 @@ CONTROLLER_CONNECTION="${CONTROLLER_CONNECTION:-unifi}"
 # go get github.com/JeffreyFalgout/jd
 jd="${GOBIN:-"${GOPATH}/bin"}/jd"
 
-die() {
+# sudo apt install jq
+jq="jq"
+
+warn() {
     echo "$@" 1>&2
+}
+
+die() {
+    warn "$@"
     exit 1
 }
 
+# usg::dump dumps the current, complete USG config.gateway.json to stdout.
 usg::dump() {
     [[ $# -eq 0 ]] || die "dump does not take any arguments."
 
@@ -38,6 +46,7 @@ usg::dump() {
         mca-ctrl -t dump-cfg
 }
 
+# usg::diff diffs the current, complete USG config.gateway.json with $1.
 usg::diff() {
     [[ $# -eq 1 ]] || die "diff takes exactly one argument: old config"
     local old="$1"
@@ -45,6 +54,117 @@ usg::diff() {
     "${jd}" "${old}" <(usg::dump)
 }
 
+# usg::partial-copy copies the given JSON value from the USG's
+# config.gateway.json to the Controller's config.gateway.json.
+#
+# The JSON values are identified by paths of the form "system.host-name".
+#
+# This command has two forms:
+#   1) <site name> <JSON path>...
+#      This form copies the values from the USG's current, complete
+#      config.gateway.json.
+#   2) <config file> <site name> <JSON path>...
+#      This form copies the values from the provided config file.
+usg::partial-copy() {
+    [[ $# -ge 2 ]] || die "partial-copy needs at least two arguments: <site name> <JSON path>... or <config file> <site name> <JSON path>..."
+    local source_config
+    local site
+    local paths
+    if [[ -f "$1" ]]; then
+        source_config="$(cat "$1")"
+        if [[ $? != 0 ]]; then
+            die "Could not read $1"
+        fi
+        site="$2"
+        paths=( "${@:3}" )
+    else
+        source_config="$(usg::dump)"
+        if [[ $? != 0 ]]; then
+            die "Could not fetch the current, complete config.gateway.json from the USG"
+        fi
+        site="$1"
+        paths=( "${@:2}" )
+    fi
+
+    local dest_config
+    dest_config="$(usg::_fetch_controller_config "${site}")"
+    if [[ $? != 0 ]]; then
+        die "Could not fetch the current config.gateway.json from the controller."
+    fi
+    local original_dest_config="${dest_config}"
+
+    local path
+    for path in "${paths[@]}"; do
+        local source_value
+        source_value="$(usg::_extract_partial_json "${source_config}" "${path}")"
+        if [[ $? != 0 ]]; then
+            die "Did not find ${path} in config."
+        fi
+
+        local dest_value
+        dest_value="$(usg::_extract_partial_json "${dest_config}" "${path}")"
+        if [[ $? != 0 ]]; then
+            dest_value="{}"
+        fi
+
+        local patch
+        local ret
+        patch=$("${jd}" <(echo "${dest_value}") <(echo "${source_value}"))
+        ret=$?
+        if [[ ${ret} == 0 ]]; then
+            warn
+            warn "${path} has no diff, ignoring."
+            continue
+        elif [[ ${ret} != 1 ]]; then
+            die "Could not calculate patch for ${path}."
+        fi
+
+        echo
+        echo "${path}"
+        echo
+        echo "${source_value}"
+
+        local ret
+        dest_config="$("${jd}" -p -populate <(echo "${patch}") <(echo "${dest_config}"))"
+        ret=$?
+        if [[ ${ret} != 0 && ${ret} != 1 ]]; then
+            die "Could not update config.gateway.json."
+        fi
+    done
+
+    local diff
+    local ret
+    diff="$("${jd}" <(echo "${original_dest_config}") <(echo "${dest_config}"))"
+    ret=$?
+    if [[ $ret == 0 ]]; then
+        die "config.gateway.json would not be updated."
+    elif [[ $ret != 1 ]]; then
+        die "Could not calculate config.gateway.json diff."
+    fi
+
+    echo
+    echo
+    echo "Original controller config:"
+    echo "${original_dest_config}"
+    echo
+    echo "Updated controller config:"
+    echo "${dest_config}"
+    echo
+    echo "Diff:"
+    echo "${diff}"
+    echo
+    if user_permission "Do you want to commit these changes?"; then
+        usg::_set_controller_config "${site}" "${dest_config}"
+        if [[ $? != 0 ]]; then
+            die
+        fi
+    fi
+}
+
+# usg::patch determines what has changed in the USG's config by diffing it's
+# current, complete config.gateway.json with a locally stored copy (normally
+# stored with usg::dump before modifying the USG's config), and then applies the
+# diff to the Controller's config.gateway.json.
 usg::patch(){
     [[ $# -eq 2 ]] || die "patch takes exactly two arguments: old config, site name"
     local old="$1"
@@ -54,19 +174,16 @@ usg::patch(){
     local ret
     patch=$(usg::diff "${old}")
     ret=$?
-    if [[ ("${ret}" == 0 && -z "${patch}") ]]; then
+    if [[ ${ret} == 0 ]]; then
         die "${old} appears to be the same as what's currently uploaded to the USG. There's nothing to do!"
-    fi
-    if [[ "${ret}" != 1  ]]; then
+    elif [[ ${ret} != 1  ]]; then
         die "diffing failed."
     fi
 
-    local controller_config_remote_path="$(usg::_controller_config_remote_path "${site}")"
     local controller_config
-    controller_config="$(ssh ${CONTROLLER_CONNECTION} -- \
-        cat "${controller_config_remote_path}")"
+    controller_config="$(usg::_fetch_controller_config "${site}")"
     if [[ $? != 0 ]]; then
-        die "Could not find controller's config.gateway.json"
+        die "Could not fetch controller's config.gateway.json"
     fi
 
     echo
@@ -85,7 +202,7 @@ usg::patch(){
     local ret
     patched="$("${jd}" -p -populate <(echo "${patch}") <(echo "${controller_config}"))"
     ret=$?
-    if [[ "${ret}" != 0 && "${ret}" != 1 ]]; then
+    if [[ ${ret} != 0 && ${ret} != 1 ]]; then
         die "Could not apply patch to controller's config.gateway.json."
     fi
 
@@ -96,21 +213,10 @@ usg::patch(){
     echo
 
     if user_permission "Do you want to commit these changes?"; then
-        ssh ${CONTROLLER_CONNECTION} -- \
-            cp "${controller_config_remote_path}" \
-               "${controller_config_remote_path}.old"
+        usg::_set_controller_config "${site}" "${patched}"
         if [[ $? != 0 ]]; then
-            die "Failed to backup existing config.gateway.json."
+            die
         fi
-
-        ssh ${CONTROLLER_CONNECTION} -- \
-            "cat > \"${controller_config_remote_path}\"" <<< "${patched}"
-        if  [[ $? != 0 ]]; then
-            die "Something went wrong uploading the patched config.gateway.json"
-        fi
-
-        # TODO: Automatically force provision the USG, then diff against the
-        # expected state. Rollback if something went wrong.
     fi
 }
 
@@ -134,15 +240,88 @@ usg::rollback() {
     fi
 }
 
-if [[ "$(type -t "usg::$1")" != "function" ]]; then
-    echo "Unknown command $1"
-    exit 1
-fi
-
 usg::_controller_config_remote_path() {
     [[ $# == 1 ]] || die "_controller_config_remote_path takes exactly one argument: site name"
     local site="$1"
     echo "/srv/unifi/data/sites/${site}/config.gateway.json"
 }
+
+usg::_fetch_controller_config() {
+    [[ $# == 1 ]] || die "_fetch_controller_config takes exactly one argument: site name"
+
+    ssh ${CONTROLLER_CONNECTION} -- \
+        cat "$(usg::_controller_config_remote_path "$1")"
+}
+
+usg::_set_controller_config() {
+    [[ $# == 2 ]] || die "_set_controller_config takes two arguments: site name, new config"
+    local site="$1"
+    local new_config="$2"
+
+    local controller_config_remote_path="$(usg::_controller_config_remote_path "${site}")"
+
+    ssh ${CONTROLLER_CONNECTION} -- \
+        cp "${controller_config_remote_path}" \
+           "${controller_config_remote_path}.old"
+    if [[ $? != 0 ]]; then
+        warn "Failed to backup existing config.gateway.json."
+        return 1
+    fi
+
+    ssh ${CONTROLLER_CONNECTION} -- \
+        "cat > \"${controller_config_remote_path}\"" <<< "${new_config}"
+    if  [[ $? != 0 ]]; then
+        warn "Something went wrong uploading the patched config.gateway.json"
+        return 1
+    fi
+
+    # TODO: Automatically force provision the USG, then diff against the
+    # expected state. Rollback if something went wrong.
+}
+
+usg::_extract_partial_json() {
+    [[ $# == 2 ]] || die "_extract_partial_json takes two arguments: JSON and JSON path."
+    local json="$1"
+    local path="$2"
+
+    local IFS='.'
+    local parts=( ${path} )
+    unset IFS
+
+    local quoted_parts=()
+    local part
+    for part in "${parts[@]}"; do
+        quoted_parts+=( "\"${part}\"" )
+    done
+
+    local IFS='.'
+    path="$(echo "${quoted_parts[*]}")"
+    unset IFS
+
+    local value
+    local ret
+    value=$("${jq}" ".${path}" <<< "${json}")
+    ret=$?
+    if [[ ${ret} != 0 ]]; then
+        return $ret
+    fi
+
+    local i
+    for ((i=${#parts[@]} - 1; i >= 0; i--)); do
+        value="{\"${parts[$i]}\": ${value}}"
+    done
+
+    echo "${value}"
+}
+
+
+##########
+#  Main  #
+##########
+
+if [[ "$1" = _* || "$(type -t "usg::$1")" != "function" ]]; then
+    echo "Unknown command $1"
+    exit 1
+fi
 
 "usg::$1" "${@:2}"
