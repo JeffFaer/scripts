@@ -61,7 +61,7 @@ usg::patch(){
         die "diffing failed."
     fi
 
-    local controller_config_remote_path="/srv/unifi/data/sites/${site}/config.gateway.json"
+    local controller_config_remote_path="$(usg::_controller_config_remote_path "${site}")"
     local controller_config
     controller_config="$(ssh ${CONTROLLER_CONNECTION} -- \
         cat "${controller_config_remote_path}")"
@@ -114,11 +114,34 @@ usg::patch(){
     fi
 }
 
-# TODO: usg::rollback to copy config.gateway.json.old to config.gateway.json?
+usg::rollback() {
+    [[ $# == 1 ]] || die "rollback takes exactly one argument: site name"
+    local site="$1"
+
+    local controller_config_remote_path="$(usg::_controller_config_remote_path "${site}")"
+    ssh ${CONTROLLER_CONNECTION} -- \
+        cp "${controller_config_remote_path}" \
+           "${controller_config_remote_path}.rolled_back"
+    if [[ $? != 0 ]]; then
+        die "Something went wrong making a backup of the existing config.gateway.json"
+    fi
+    ssh ${CONTROLLER_CONNECTION} -- \
+        cp "${controller_config_remote_path}.old" \
+           "${controller_config_remote_path}"
+    if [[ $? != 0 ]]; then
+        die "Something went wrong rolling back config.gateway.json"
+    fi
+}
 
 if [[ "$(type -t "usg::$1")" != "function" ]]; then
     echo "Unknown command $1"
     exit 1
 fi
+
+usg::_controller_config_remote_path() {
+    [[ $# == 1 ]] || die "_controller_config_remote_path takes exactly one argument: site name"
+    local site="$1"
+    echo "/srv/unifi/data/sites/${site}/config.gateway.json"
+}
 
 "usg::$1" "${@:2}"
