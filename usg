@@ -51,7 +51,7 @@ usg::diff() {
     [[ $# -eq 1 ]] || die "diff takes exactly one argument: old config"
     local old="$1"
 
-    "${jd}" "${old}" <(usg::dump)
+    "${jd}" -assoc-in "${old}" <(usg::dump)
 }
 
 # usg::partial-copy copies the given JSON value from the USG's
@@ -109,7 +109,7 @@ usg::partial-copy() {
 
         local patch
         local ret
-        patch=$("${jd}" <(echo "${dest_value}") <(echo "${source_value}"))
+        patch=$("${jd}" -assoc-in <(echo "${dest_value}") <(echo "${source_value}"))
         ret=$?
         if [[ ${ret} == 0 ]]; then
             warn
@@ -125,7 +125,7 @@ usg::partial-copy() {
         echo "${source_value}"
 
         local ret
-        dest_config="$("${jd}" -p -populate <(echo "${patch}") <(echo "${dest_config}"))"
+        dest_config="$("${jd}" -p <(echo "${patch}") <(echo "${dest_config}"))"
         ret=$?
         if [[ ${ret} != 0 && ${ret} != 1 ]]; then
             die "Could not update config.gateway.json."
@@ -134,7 +134,7 @@ usg::partial-copy() {
 
     local diff
     local ret
-    diff="$("${jd}" <(echo "${original_dest_config}") <(echo "${dest_config}"))"
+    diff="$("${jd}" -assoc-in <(echo "${original_dest_config}") <(echo "${dest_config}"))"
     ret=$?
     if [[ $ret == 0 ]]; then
         die "config.gateway.json would not be updated."
@@ -200,7 +200,7 @@ usg::patch(){
 
     local patched
     local ret
-    patched="$("${jd}" -p -populate <(echo "${patch}") <(echo "${controller_config}"))"
+    patched="$("${jd}" -p <(echo "${patch}") <(echo "${controller_config}"))"
     ret=$?
     if [[ ${ret} != 0 && ${ret} != 1 ]]; then
         die "Could not apply patch to controller's config.gateway.json."
