@@ -6,15 +6,10 @@
 # 3. $ usg diff config.json
 # 4. $ usg patch config.json default
 # 5. Force provisioning in the Unifi UI
-# 6. In USG:
-#   - configure
-#   - set system host-name foo
-#   - set system host-name <original-value>
-#   - commit; save; exit
+# 6. $ usg config-refresh
 # 7. $ usg diff config.json
 # 8. The previous usg diff fields show show up again, in addition to
 #    unifi.mgmt.cfgversion.
-#
 
 # ssh arguments to connect to the USG and the UniFi Controller. The arguments
 # should be escaped, if necessary.
@@ -220,6 +215,19 @@ usg::patch(){
     fi
 }
 
+# usg::config-refresh refreshes the USG's config.gateway.json after a force
+# provision to get rid of any transient differences that might exist (e.g.
+# "123" -> 123).
+usg::config-refresh() {
+    [[ $# == 0 ]] || die "config-refresh doesn't take any arguments."
+
+    local dir="$(dirname "${BASH_SOURCE}")"
+    ssh -o loglevel=ERROR ${USG_CONNECTION} -- \
+        "vbash -s" < "${dir}/usg_scripts/config_refresh.sh"
+}
+
+# usg::rollback rollsback the UniFi controller's config.gateway.json to its most
+# recent config.gateway.json.old file.
 usg::rollback() {
     [[ $# == 1 ]] || die "rollback takes exactly one argument: site name"
     local site="$1"
