@@ -129,7 +129,7 @@ usg::partial-copy() {
 
     local diff
     local ret
-    diff="$("${jd}" -assoc-in <(echo "${original_dest_config}") <(echo "${dest_config}"))"
+    diff="$("${jd}" <(echo "${original_dest_config}") <(echo "${dest_config}"))"
     ret=$?
     if [[ $ret == 0 ]]; then
         die "config.gateway.json would not be updated."
@@ -156,7 +156,7 @@ usg::partial-copy() {
     fi
 }
 
-# usg::patch determines what has changed in the USG's config by diffing it's
+# usg::patch determines what has changed in the USG's config by diffing its
 # current, complete config.gateway.json with a locally stored copy (normally
 # stored with usg::dump before modifying the USG's config), and then applies the
 # diff to the Controller's config.gateway.json.
