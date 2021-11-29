@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Utilities to make managing a Unifi Security Gateway a little easier.
 #
-# 1. $ usg dump > config.json
-# 2. Make changes to USG
-# 3. $ usg diff config.json
-# 4. $ usg patch config.json default
-# 5. Force provisioning in the Unifi UI
-# 6. $ usg config-refresh
-# 7. $ usg diff config.json
-# 8. The previous usg diff fields show show up again, in addition to
+# 1. $ usg config-refresh
+# 2. $ usg dump > config.json
+# 3. Make changes to USG
+# 4. $ usg diff config.json
+# 5. $ usg patch config.json default
+# 6. Force provisioning in the Unifi UI
+# 7. $ usg config-refresh
+# 8. $ usg diff config.json
+# 9. The previous usg diff fields show show up again, in addition to
 #    unifi.mgmt.cfgversion.
 
 # ssh arguments to connect to the USG and the UniFi Controller. The arguments
