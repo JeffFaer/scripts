@@ -149,7 +149,7 @@ usg::partial-copy() {
     echo "Diff:"
     echo "${diff}"
     echo
-    if user_permission "Do you want to commit these changes?"; then
+    if dotfiles::user_permission "Do you want to commit these changes?"; then
         usg::_set_controller_config "${site}" "${dest_config}"
         if [[ $? != 0 ]]; then
             die
@@ -208,7 +208,7 @@ usg::patch(){
     echo "${patched}"
     echo
 
-    if user_permission "Do you want to commit these changes?"; then
+    if dotfiles::user_permission "Do you want to commit these changes?"; then
         usg::_set_controller_config "${site}" "${patched}"
         if [[ $? != 0 ]]; then
             die

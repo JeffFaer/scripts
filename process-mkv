@@ -34,7 +34,7 @@ for file in "$@"; do
         fi
         if [[ "$file_episode" != "$next_file_episode" ]]; then
             echo "$file_name appears to be episode ${file_episode}, but $next_file_episode appears to be episode ${next_file_episode}."
-            if ! user_permission "Would you like to continue anyway?"; then
+            if ! dotfiles::user_permission "Would you like to continue anyway?"; then
                 exit 1
             fi
         fi
