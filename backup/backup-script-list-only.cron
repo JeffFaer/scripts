@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+interval_seconds=$((86400*3)) # 3 days
+max_backups=60                # 60 * 3 days = 180 days
+scripts_dir="$(dirname $(dirname "$0"))"
+dirs_to_list=( "$HOME" )
+
+dest="$(xdg-user-dir DOCUMENTS)/Computers/${HOSTNAME}"
+
+if [[ ! -d "${dest}" ]]; then
+    echo "${dest} does not exist" 1>&2
+    exit 1
+fi
+
+now=$(date +%s)
+mtime=$(stat -c "%Y" "${dest}")
+seconds_since_last_backup=$((now-mtime))
+
+if [[ ${seconds_since_last_backup} -lt ${interval_seconds} ]]; then
+    remaining=$((interval_seconds-seconds_since_last_backup))
+    echo "Will backup again in $(display-seconds ${remaining})" 1>&2
+    exit
+fi
+
+"${scripts_dir}"/backup-script \
+    --destination-root "${dest}" \
+    --list-only "${dirs_to_list[@]}"
+
+num_backups=$(ls "${dest}" | wc -l)
+num_extra_backups=$((num_backups - max_backups))
+if [[ $num_extra_backups -gt 0 ]]; then
+    IFS=$'\n'
+    to_remove=( $(ls -c | tail -"${num_extra_backups}") )
+    unset IFS
+    echo "Removing ${num_extra_backups} extra backups: ${to_remove[@]}" 1>&2
+    rm -r "${to_remove[@]}"
+fi
