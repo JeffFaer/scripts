@@ -30,7 +30,7 @@ num_backups=$(ls "${dest}" | wc -l)
 num_extra_backups=$((num_backups - max_backups))
 if [[ $num_extra_backups -gt 0 ]]; then
     IFS=$'\n'
-    to_remove=( $(ls -c | tail -"${num_extra_backups}") )
+    to_remove=( $(ls -t | tail -"${num_extra_backups}") )
     unset IFS
     echo "Removing ${num_extra_backups} extra backups: ${to_remove[@]}" 1>&2
     rm -r "${to_remove[@]}"
