@@ -11,4 +11,4 @@ USER=$(whoami)
 PID=$(pgrep -u "$USER" gnome-session | head -1)
 load_environ "$PID" DBUS_SESSION_BUS_ADDRESS
 
-$(dirname "$0")/randomize-background.sh "$@"
+$(dirname "$0")/randomize-background "$@"
