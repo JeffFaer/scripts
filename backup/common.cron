@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Common utilities for .cron backup scripts.
+
+# Implements a periodic backup with a maximum number of backups by
+#   1) Checking to see if the most recently modified file in a directory was
+#      modified after the backup interval
+#   2) Invoking a passed in backup command
+#   3) Keeping only the n most recently modified files
+#
+# $1: Backup directory to check modified times, number of backups in
+# $2: Backup interval in seconds
+# $3: The number of backups we should retain
+# $4+: The backup command
+backup::cron::periodic_with_maximum_backups() {
+    local backup_dir="$1"
+    local backup_interval="$2"
+    local num_backups="$3"
+    local cmd=( "${@:4}" )
+
+    local seconds_since_last_backup=$(\
+        backup::cron::seconds_since_last_file_modified "${backup_dir}")
+    if [[ -n "${seconds_since_last_backup}" \
+        && "${seconds_since_last_backup}" -lt "${backup_interval}" ]]; then
+        local remaining=$((backup_interval-seconds_since_last_backup))
+        echo "Will backup again in $(display-seconds ${remaining})" 1>&2
+        return 0
+    fi
+
+    "${cmd[@]}"
+    if [[ $? != 0 ]]; then
+        echo "backup command failed" 1>&2
+        return 1
+    fi
+
+    backup::cron::keep_n_most_recent_files "${num_backups}" "${backup_dir}"
+    if [[ $? != 0 ]]; then
+        echo "Could not prune old backups." 1>&2
+        return 1
+    fi
+}
+
+# Prints the number of seconds since the most recently modified file in $1 was
+# modified.
+#
+# $1: A directory containing files.
+# @returns 1 if $1 is an empty directory.
+backup::cron::seconds_since_last_file_modified() {
+    local most_recent="$(ls -1t "$1" | head -1)"
+    if [[ -z "${most_recent}" ]]; then
+        return 1
+    fi
+
+    local now="$(date +%s)"
+    local mtime="$(stat -c "%Y" "$1/${most_recent}")"
+    echo $((now-mtime))
+}
+
+# Deletes all but the n most recently modified files from $2.
+#
+# $1: n
+# $2: A directory
+backup::cron::keep_n_most_recent_files() {
+    local n="$1"
+    local dir="$2"
+
+    local num_backups=$(ls -1 "$dir" | wc -l)
+    local num_extra_backups=$((num_backups - n))
+    if [[ $num_extra_backups -gt 0 ]]; then
+        local IFS=$'\n'
+        local to_remove=( $(ls -1t "$dir" | tail -"${num_extra_backups}") )
+        unset IFS
+        echo "Removing ${num_extra_backups} extra backups: ${to_remove[@]}" 1>&2
+        rm "${to_remove[@]}"
+    fi
+}

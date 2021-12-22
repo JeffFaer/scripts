@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+OCTOPI_SSH_FLAGS="${OCTOPI_SSH_FLAGS:--i ~/.ssh/octopi_backup -l backup-generator}"
+OCTOPI_CONNECTION="${OCTOPI_CONNECTION:-octopi}"
+
+set -u
+
+[[ $# -eq 1 ]] || exit 1
+backup_dir="$1"
+
+backup_zip="/data/backups/backup_$(date +%Y.%m.%d).zip"
+
+echo "Executing on octopi"
+echo
+ssh ${OCTOPI_SSH_FLAGS} ${OCTOPI_CONNECTION} \
+    "sudo -u pi /home/pi/create-octoprint-backup ${backup_zip}"
+if [[ $? != 0 ]]; then
+    echo "Could not create octopi backup." 1>&2
+    exit 1
+fi
+
+echo
+echo "Moving remote ${backup_zip} to local directory ${backup_dir}"
+echo
+rsync -e "ssh ${OCTOPI_SSH_FLAGS}" --archive --remove-source-files \
+    ${OCTOPI_CONNECTION}":${backup_zip}" "$1/"
+if [[ $? != 0 ]]; then
+    echo "Could not move octopi backup." 1>&2
+    exit 1
+fi
