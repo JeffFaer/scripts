@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -u
 
+scripts_dir="$(realpath "$(dirname "${BASH_SOURCE}")"/..)"
+PATH="${PATH}:${scripts_dir}"
+
+source ~/.bash_functions || exit 1
+
 BACKUP_LOCATION="$(xdg-user-dir DOCUMENTS)/Computers"
 
 backup::unifi() {
