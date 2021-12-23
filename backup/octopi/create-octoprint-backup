@@ -1,5 +1,51 @@
 #!/usr/bin/env bash
-[[ $# -eq 1 ]] || exit 1
+# sudo apt install jq
 
-/home/pi/oprint/bin/octoprint plugins backup:backup --path "$1"
+set -u
+octoprint="/home/pi/oprint/bin/octoprint"
+
+[[ $# -eq 1 ]] || exit 1
+backup_zip="$1"
+
+IFS=$'\n'
+status=( $("${octoprint}" client get /api/printer) )
+ret=$?
+unset IFS
+
+if [[ ${ret} != 0 ]]; then
+    echo "Could not determine printer status." 1>&2
+    exit 1
+fi
+
+case "${status[0]}" in
+    "Status Code: 200")
+        printing="$(jq .state.flags.printing <<< "${status[1]}")"
+        if [[ $? != 0 ]]; then
+            echo "Could not parse printer status: ${status[1]}" 1>&2
+            exit 1
+        fi
+        case "${printing}" in
+            true)
+                echo "Printer is currently active. Cannot create backup." 1>&2
+                exit 1
+                ;;
+            false)
+                # Ok
+                ;;
+            *)
+                echo "Got unexpected printer state: ${printing}" 1>&2
+                exit 1
+                ;;
+        esac
+        ;;
+    "Status Code: 409")
+        # Printer is not operational/disconnected.
+        ;;
+    *)
+        echo "Unexpected status from octoprint API: ${status[@]}" 1>&2
+        exit 1
+        ;;
+esac
+
+"${octoprint}" plugins backup:backup --path "${backup_zip}"
 chmod go+w "$1"

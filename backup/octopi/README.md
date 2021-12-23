@@ -36,6 +36,7 @@ Scripts for periodically backing up an octopi.
     backup-generator ALL = (pi) NOPASSWD: /home/pi/create-octoprint-backup
     [octopi] $ sudo mkdir -p /data/backups
     [octopi] $ sudo chmod +w /data/backups
+    [octopi] $ sudo apt install jq
     ```
 
     And then you should be able to make calls like:
