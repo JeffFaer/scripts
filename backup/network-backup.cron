@@ -38,7 +38,10 @@ for ((i=0;i<${#fns[@]};i++)); do
     echo "Backing up ${name} to ${dir}"
     echo
     echo
-    if ! "${fn}" "${dir}"; then
+    if [[ ! -d "${dir}" ]]; then
+        echo "${dir} does not exist" 1>&2
+        failed+=( "${name}" )
+    elif ! "${fn}" "${dir}"; then
         failed+=( "${name}" )
     fi
     ((j++))
