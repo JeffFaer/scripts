@@ -25,10 +25,10 @@ Scripts for periodically backing up a unifi controller (cloud key).
 [server] $ ssh-keygen -f ~/.ssh/unifi_backup -N ''
 [server] $ ssh-copy-id -i ~/.ssh/unifi_backup backup-generator@unifi
 [unifi]  $ sudo passwd -l backup-generator
-[unifi]  $ sudo chmod +x /data/autobackup
-[unifi]  $ sudo chmod -R +r /data/autobackup
+[unifi]  $ sudo chown :backup-generator /data/autobackup
+[unifi]  $ sudo chmod g+rs /data/autobackup
 ```
-<!-- TODO: Do I need a setfacl -d -m user:backup-generator /data/autobackup? -->
+<!-- TODO: Do I need to change a umask somewhere to get g+r by default? -->
 
 And then you should be able to make calls like:
 ```
