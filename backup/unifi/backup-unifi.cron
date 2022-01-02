@@ -11,7 +11,7 @@ backup_command="$(dirname "${BASH_SOURCE}")/backup-unifi"
 [[ $# -eq 1 ]] || exit 1
 backup_location="$1"
 
-"${backup_command}" "$1"
+"${backup_command}" "${backup_location}"
 if [[ $? != 0 ]]; then
     exit 1
 fi
@@ -24,6 +24,6 @@ if [[ $? != 0 ]]; then
 fi
 
 if [[ "${seconds_since_last_backup}" -gt "${UNIFI_BACKUP_INTERVAL}" ]]; then
-    echo "unifi last backed up $(display-seconds "${seconds_since_last_backup}"). Expected at most $(display-seconds "${UNIFI_BACKUP_INTERVAL}")." 2>&1
+    echo "unifi last backed up $(display-seconds "${seconds_since_last_backup}"). Expected at most $(display-seconds "${UNIFI_BACKUP_INTERVAL}")." 1>&2
     exit 1
 fi

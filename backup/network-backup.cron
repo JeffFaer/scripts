@@ -16,6 +16,10 @@ backup::octopi() {
     "$(dirname "${BASH_SOURCE}")/octopi/backup-octopi.cron" "$@"
 }
 
+backup::sonarr() {
+    "$(dirname "${BASH_SOURCE}")/sonarr/backup-sonarr.cron" "$@"
+}
+
 fns=( $(compgen -A function "backup::") )
 failed=()
 j=0
