@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+HASS_SSH_FLAGS="${HASS_SSH_FLAGS:--i ~/.ssh/hass_backup -l backup-generator}"
+HASS_CONNECTION="${HASS_CONNECTION:-hass}"
+
+set -u
+
+[[ $# -eq 1 ]] || exit 1
+backup_dir="$1"
+
+now="$(date +%Y.%m.%d)"
+
+echo "Executing on hass"
+echo
+backup_file="$(ssh ${HASS_SSH_FLAGS} ${HASS_CONNECTION} \
+    "sudo /home/jeffrey/create-hass-backup")"
+if [[ $? != 0 ]]; then
+    echo "Could not create hass backup." 1>&2
+    exit 1
+fi
+
+echo
+echo "Moving remote ${backup_file} to local directory ${backup_dir}"
+echo
+rsync -e "ssh ${HASS_SSH_FLAGS}" --archive --remove-source-files \
+    ${HASS_CONNECTION}:"${backup_file}" "${backup_dir}/${now}.tar"
+if [[ $? != 0 ]]; then
+    echo "Could not move hass backup." 1>&2
+    exit 1
+fi

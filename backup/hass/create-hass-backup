@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+SLUG_REGEX="^slug: \"?([^ \"]+)\"?$"
+OWNING_USER="backup-generator"
+DEST="$(eval echo ~${OWNING_USER})"
+
+set -u
+
+[[ $# -eq 0 ]] || exit 1
+
+slug="$(ha backups new)"
+if [[ $? != 0 ]]; then
+    echo "Failed to create hass backup." 1>&2
+    exit 1
+fi
+
+if [[ ! "${slug}" =~ ${SLUG_REGEX} ]]; then
+    echo "Unrecognized backup output: ${slug}" 1>&2
+    exit 1
+fi
+slug="${BASH_REMATCH[1]}"
+
+mv "/usr/share/hassio/backup/${slug}.tar" "${DEST}/${slug}.tar"
+if [[ $? != 0 ]]; then
+    echo "Could not move backup ${slug} to ${DEST}"
+    exit 1
+fi
+
+chown backup-generator:backup-generator "${DEST}/${slug}.tar"
+if [[ $? != 0 ]]; then
+    echo "Failed to update permissions on backup ${slug}" 1>&2
+    exit 1
+fi
+
+echo "${DEST}/${slug}.tar"

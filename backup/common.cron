@@ -45,13 +45,13 @@ backup::cron::periodic_with_maximum_backups() {
 # $1: A directory containing files.
 # @returns 1 if $1 is an empty directory.
 backup::cron::seconds_since_last_file_modified() {
-    local most_recent="$(ls -1t "$1" | head -1)"
+    local most_recent="$(ls -1td "$1"/* | head -1)"
     if [[ -z "${most_recent}" ]]; then
         return 1
     fi
 
     local now="$(date +%s)"
-    local mtime="$(stat -c "%Y" "$1/${most_recent}")"
+    local mtime="$(stat -c "%Y" "${most_recent}")"
     echo $((now-mtime))
 }
 
@@ -67,7 +67,7 @@ backup::cron::keep_n_most_recent_files() {
     local num_extra_backups=$((num_backups - n))
     if [[ $num_extra_backups -gt 0 ]]; then
         local IFS=$'\n'
-        local to_remove=( $(ls -1t "$dir" | tail -"${num_extra_backups}") )
+        local to_remove=( $(ls -1td "$dir"/* | tail -"${num_extra_backups}") )
         unset IFS
         echo "Removing ${num_extra_backups} extra backups: ${to_remove[@]}" 1>&2
         rm "${to_remove[@]}"

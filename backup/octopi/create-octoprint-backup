@@ -48,4 +48,8 @@ case "${status[0]}" in
 esac
 
 "${octoprint}" plugins backup:backup --path "${backup_zip}"
-chmod go+w "$1"
+if [[ $? != 0 ]]; then
+    echo "Failed to create octoprint backup." 1>&2
+    exit 1
+fi
+chmod go+w "${backup_zip}"

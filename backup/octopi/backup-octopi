@@ -22,7 +22,7 @@ echo
 echo "Moving remote ${backup_zip} to local directory ${backup_dir}"
 echo
 rsync -e "ssh ${OCTOPI_SSH_FLAGS}" --archive --remove-source-files \
-    ${OCTOPI_CONNECTION}":${backup_zip}" "$1/"
+    ${OCTOPI_CONNECTION}":${backup_zip}" "${backup_dir}/"
 if [[ $? != 0 ]]; then
     echo "Could not move octopi backup." 1>&2
     exit 1

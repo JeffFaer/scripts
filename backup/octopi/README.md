@@ -24,7 +24,7 @@ Scripts for periodically backing up an octopi.
   - `create-octoprint-backup`
 
     A file that runs on the octopi to trigger a backup. It's a separate script
-    so that we can create a user whose only special prvilege is to run this
+    so that we can create a user whose only special privilege is to run this
     script that creates a backup. To set it up, do the following
     ```
     [octopi] $ sudo adduser backup-generator

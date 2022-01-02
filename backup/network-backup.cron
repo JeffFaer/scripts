@@ -20,6 +20,10 @@ backup::sonarr() {
     "$(dirname "${BASH_SOURCE}")/sonarr/backup-sonarr.cron" "$@"
 }
 
+backup::hass() {
+    "$(dirname "${BASH_SOURCE}")/hass/backup-hass.cron" "$@"
+}
+
 fns=( $(compgen -A function "backup::") )
 failed=()
 j=0
