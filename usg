@@ -17,10 +17,10 @@
 USG_CONNECTION="${USG_CONNECTION:-router}"
 CONTROLLER_CONNECTION="${CONTROLLER_CONNECTION:-unifi}"
 
-# https://github.com/josephburnett/jd
+# https://github.com/evanphx/json-patch
 # Currently relying on my forked version:
-# go get github.com/JeffreyFalgout/jd
-jd="${GOBIN:-"${GOPATH}/bin"}/jd"
+# https://github.com/evanphx/json-patch/pull/154
+jsonpatch="${GOBIN:-"${GOPATH}/bin"}/json-patch"
 
 # sudo apt install jq
 jq="jq"
@@ -47,7 +47,7 @@ usg::diff() {
     [[ $# -eq 1 ]] || die "diff takes exactly one argument: old config"
     local old="$1"
 
-    "${jd}" -assoc-in "${old}" <(usg::dump)
+    "${jsonpatch}" create "${old}" <(usg::dump)
 }
 
 # usg::partial-copy copies the given JSON value from the USG's
@@ -104,15 +104,13 @@ usg::partial-copy() {
         fi
 
         local patch
-        local ret
-        patch=$("${jd}" -assoc-in <(echo "${dest_value}") <(echo "${source_value}"))
-        ret=$?
-        if [[ ${ret} == 0 ]]; then
+        patch="$("${jsonpatch}" create <(echo "${dest_value}") <(echo "${source_value}"))"
+        if [[ $? != 0 ]]; then
+            die "Could not calculate patch for ${path}."
+        elif [[ "${patch}" == "{}" ]]; then
             warn
             warn "${path} has no diff, ignoring."
             continue
-        elif [[ ${ret} != 1 ]]; then
-            die "Could not calculate patch for ${path}."
         fi
 
         echo
@@ -120,22 +118,18 @@ usg::partial-copy() {
         echo
         echo "${source_value}"
 
-        local ret
-        dest_config="$("${jd}" -p <(echo "${patch}") <(echo "${dest_config}"))"
-        ret=$?
-        if [[ ${ret} != 0 && ${ret} != 1 ]]; then
+        dest_config="$("${jsonpatch}" apply --indent "  " -p <(echo "${patch}") <(echo "${dest_config}"))"
+        if [[ $? != 0 ]]; then
             die "Could not update config.gateway.json."
         fi
     done
 
     local diff
-    local ret
-    diff="$("${jd}" <(echo "${original_dest_config}") <(echo "${dest_config}"))"
-    ret=$?
-    if [[ $ret == 0 ]]; then
-        die "config.gateway.json would not be updated."
-    elif [[ $ret != 1 ]]; then
+    diff="$("${jsonpatch}" create <(echo "${original_dest_config}") <(echo "${dest_config}"))"
+    if [[ $? != 0 ]]; then
         die "Could not calculate config.gateway.json diff."
+    elif [[ "${diff}" == "{}" ]]; then
+        die "config.gateway.json would not be updated."
     fi
 
     echo
@@ -167,13 +161,11 @@ usg::patch(){
     local site="$2"
 
     local patch
-    local ret
-    patch=$(usg::diff "${old}")
-    ret=$?
-    if [[ ${ret} == 0 ]]; then
-        die "${old} appears to be the same as what's currently uploaded to the USG. There's nothing to do!"
-    elif [[ ${ret} != 1  ]]; then
+    patch="$(usg::diff "${old}")"
+    if [[ $? != 0 ]]; then
         die "diffing failed."
+    elif [[ "${patch}" == "{}" ]]; then
+        die "${old} appears to be the same as what's currently uploaded to the USG. There's nothing to do!"
     fi
 
     local controller_config
@@ -188,25 +180,35 @@ usg::patch(){
     echo "${patch}"
     echo
 
-    echo
     echo "Current config.gateway.json:"
     echo
     echo "${controller_config}"
     echo
 
     local patched
-    local ret
-    patched="$("${jd}" -p <(echo "${patch}") <(echo "${controller_config}"))"
-    ret=$?
-    if [[ ${ret} != 0 && ${ret} != 1 ]]; then
+    patched="$("${jsonpatch}" apply --indent "  " -p <(echo "${patch}") <(echo "${controller_config}"))"
+    if [[ $? != 0 ]]; then
         die "Could not apply patch to controller's config.gateway.json."
     fi
 
-    echo
     echo "New config.gateway.json:"
     echo
     echo "${patched}"
     echo
+
+    local effective_diff
+    effective_diff="$("${jsonpatch}" create <(echo "${controller_config}") <(echo "${patched}"))"
+    if [[ $? != 0 ]]; then
+        die "Could not calculate effective diff."
+    elif [[ "${effective_diff}" == "{}" ]]; then
+        die "It doesn't look like applying the patch to config.gateway.json would do anything. Does it already have the same values that the patch would be setting?"
+    fi
+
+    echo "Effective diff:"
+    echo
+    echo "${effective_diff}"
+    echo
+
 
     if dotfiles::user_permission "Do you want to commit these changes?"; then
         usg::_set_controller_config "${site}" "${patched}"
