@@ -23,7 +23,7 @@ if [[ $? != 0 ]]; then
     exit 1
 fi
 
-echo "sonarr last backed up $(display-seconds "${seconds_since_last_backup}")." 1>&2
+echo "sonarr last backed up $(display-seconds "${seconds_since_last_backup}") ago." 1>&2
 if [[ "${seconds_since_last_backup}" -gt "${SONARR_BACKUP_INTERVAL}" ]]; then
     echo "Expected at most $(display-seconds "${SONARR_BACKUP_INTERVAL}")" 1>&2
     exit 1
