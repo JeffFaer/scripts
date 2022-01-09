@@ -16,8 +16,16 @@ backup::octopi() {
     "$(dirname "${BASH_SOURCE}")/octopi/backup-octopi.cron" "$@"
 }
 
-backup::arr() {
-    "$(dirname "${BASH_SOURCE}")/*arr/backup-*arr.cron" "$@"
+backup::sonarr() {
+    "$(dirname "${BASH_SOURCE}")/*arr/backup-*arr.cron" "sonarr" "$@"
+}
+
+backup::lidarr() {
+    "$(dirname "${BASH_SOURCE}")/*arr/backup-*arr.cron" "lidarr" "$@"
+}
+
+backup::readarr() {
+    "$(dirname "${BASH_SOURCE}")/*arr/backup-*arr.cron" "readarr" "$@"
 }
 
 backup::hass() {

@@ -2,62 +2,30 @@
 # *arr instances should be backing themselves up every 7 days, but give
 # ourselves a little wiggle room.
 ARR_BACKUP_INTERVAL="${ARR_BACKUP_INTERVAL:-$((86400*8))}" # 8 days
-ARR_INSTANCES="${ARR_INSTANCES:-sonarr lidarr readarr}"
-ARR_INSTANCES=( ${ARR_INSTANCES} )
 
 set -u
 
 source "$(dirname "${BASH_SOURCE}")/../common.cron" || exit 1
 backup_command="$(dirname "${BASH_SOURCE}")/backup-*arr"
 
-[[ $# -eq 1 ]] || exit 1
-backup_location="$1"
+[[ $# -eq 2 ]] || exit 1
+instance="$1"
+backup_location="$2"
 
-backup_arr() {
-    [[ $# -eq 2 ]] || exit 1
-    local backup_location="$1"
-    local instance="$2"
+"${backup_command}" "${instance}" "${backup_location}"
+if [[ $? != 0 ]]; then
+    exit 1
+fi
 
-    backup_location="${backup_location}/${instance}"
+seconds_since_last_backup=$(\
+    backup::cron::seconds_since_last_file_modified "${backup_location}")
+if [[ $? != 0 ]]; then
+    echo "There are no ${instance} backup files." 1>&2
+    return 1
+fi
 
-    "${backup_command}" "${backup_location}" "${instance}"
-    if [[ $? != 0 ]]; then
-        return 1
-    fi
-
-    local seconds_since_last_backup
-    seconds_since_last_backup=$(\
-        backup::cron::seconds_since_last_file_modified "${backup_location}")
-    if [[ $? != 0 ]]; then
-        echo "There are no ${instance} backup files." 1>&2
-        return 1
-    fi
-
-    echo "${instance} last backed up $(display-seconds "${seconds_since_last_backup}") ago." 1>&2
-    if [[ "${seconds_since_last_backup}" -gt "${ARR_BACKUP_INTERVAL}" ]]; then
-        echo "Expected at most $(display-seconds "${ARR_BACKUP_INTERVAL}")" 1>&2
-        return 1
-    fi
-}
-
-failed=()
-for ((i=0; i<${#ARR_INSTANCES[@]}; i++)); do
-    instance="${ARR_INSTANCES[$i]}"
-
-    if ((i>0)); then
-        echo
-        echo
-    fi
-    echo "Backing up ${instance}"
-    echo
-    backup_arr "${backup_location}" "${instance}"
-    if [[ $? != 0 ]]; then
-        failed+=( "${instance}" )
-    fi
-done
-
-if [[ ${#failed[@]} != 0 ]]; then
-    echo 1>&2
-    echo "Failed to backup ${failed[@]}" 1>&2
+echo "${instance} last backed up $(display-seconds "${seconds_since_last_backup}") ago." 1>&2
+if [[ "${seconds_since_last_backup}" -gt "${ARR_BACKUP_INTERVAL}" ]]; then
+    echo "Expected at most $(display-seconds "${ARR_BACKUP_INTERVAL}")" 1>&2
     exit 1
 fi
