@@ -16,8 +16,8 @@ backup::octopi() {
     "$(dirname "${BASH_SOURCE}")/octopi/backup-octopi.cron" "$@"
 }
 
-backup::sonarr() {
-    "$(dirname "${BASH_SOURCE}")/sonarr/backup-sonarr.cron" "$@"
+backup::arr() {
+    "$(dirname "${BASH_SOURCE}")/*arr/backup-*arr.cron" "$@"
 }
 
 backup::hass() {
@@ -25,9 +25,8 @@ backup::hass() {
 }
 
 fns=( $(compgen -A function "backup::") )
-failed=()
-j=0
-for ((i=0;i<${#fns[@]};i++)); do
+allowed_fns=()
+for ((i=0; i<${#fns[@]}; i++)); do
     fn="${fns[$i]}"
     if dotfiles::is_function_exported "${fn}"; then
         continue
@@ -38,8 +37,17 @@ for ((i=0;i<${#fns[@]};i++)); do
         continue
     fi
 
+    allowed_fns+=( "${fn}" )
+done
+
+fns=( "${allowed_fns[@]}" )
+failed=()
+for ((i=0;i<${#fns[@]};i++)); do
+    fn="${fns[$i]}"
+    name="${fn#backup::}"
     dir="${BACKUP_LOCATION}/${name}"
-    if [[ $j -gt 0 ]]; then
+
+    if ((i>0)); then
         echo
         echo
     fi
@@ -52,12 +60,11 @@ for ((i=0;i<${#fns[@]};i++)); do
     elif ! "${fn}" "${dir}"; then
         failed+=( "${name}" )
     fi
-    ((j++))
 done
 
 if [[ ${#failed[@]} -gt 0 ]]; then
-    echo
-    echo
+    echo 1>&2
+    echo 1>&2
     echo "Backups failed: ${failed[@]}" 1>&2
     exit 1
 fi

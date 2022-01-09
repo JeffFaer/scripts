@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -u
+
+[[ $# -eq 2 ]] || exit 1
+backup_dir="$1"
+instance="$2"
+
+rsync --archive "${HOME}/homelab/${instance}/config/Backups/" "${backup_dir}"
+if [[ $? != 0 ]]; then
+    exit 1
+fi
