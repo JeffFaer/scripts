@@ -20,6 +20,10 @@ backup::sonarr() {
     "$(dirname "${BASH_SOURCE}")/*arr/backup-*arr.cron" "sonarr" "$@"
 }
 
+backup::radarr() {
+    "$(dirname "${BASH_SOURCE}")/*arr/backup-*arr.cron" "radarr" "$@"
+}
+
 backup::lidarr() {
     "$(dirname "${BASH_SOURCE}")/*arr/backup-*arr.cron" "lidarr" "$@"
 }
