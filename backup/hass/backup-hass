@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-HASS_SSH_FLAGS="${HASS_SSH_FLAGS:--i ~/.ssh/hass_backup -l backup-generator}"
+HASS_SSH_FLAGS="${HASS_SSH_FLAGS:--l backup-generator}"
 HASS_CONNECTION="${HASS_CONNECTION:-hass}"
 
 set -u
@@ -12,7 +12,7 @@ now="$(date +%Y.%m.%d)"
 echo "Executing on hass"
 echo
 backup_file="$(ssh ${HASS_SSH_FLAGS} ${HASS_CONNECTION} \
-    "sudo /home/jeffrey/create-hass-backup")"
+    'sudo SUPERVISOR_TOKEN="$(cat /root/supervisor_token)" /root/create-hass-backup')"
 if [[ $? != 0 ]]; then
     echo "Could not create hass backup." 1>&2
     exit 1

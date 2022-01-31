@@ -1,0 +1,2 @@
+Defaults:backup-generator env_keep += SUPERVISOR_TOKEN
+backup-generator ALL = (root) NOPASSWD: /root/create-hass-backup

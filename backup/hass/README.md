@@ -26,13 +26,10 @@ Scripts for periodically backing up a hass installation.
     that we can create a user whose only special privilege is to run this script
     that creates a backup.
     ```
-    [hass]   $ sudo adduser backup-generator
+    [server] $ scp -r addon/ hass:~/addons/backup-generator
     [server] $ ssh-keygen -f ~/.ssh/hass_backup -N ''
-    [server] $ ssh-copy-id -i ~/.ssh/hass_backup backup-generator@hass
-    [server] $ scp create-hass-backup jeffrey@hass:~
-    [hass]   $ sudo passwd -l backup-generator
-    [hass]   $ cat /etc/sudoers.d/backup-generator
-    backup-generator ALL = (root) NOPASSWD: /home/jeffrey/create-hass-backup
+    [hass]   <install backup-generator addon>
+    [hass]   <add authorized keys in the UI>
     ```
 
     And then you should be able to make calls like:

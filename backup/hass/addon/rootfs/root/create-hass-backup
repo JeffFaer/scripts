@@ -19,13 +19,13 @@ if [[ ! "${slug}" =~ ${SLUG_REGEX} ]]; then
 fi
 slug="${BASH_REMATCH[1]}"
 
-mv "/usr/share/hassio/backup/${slug}.tar" "${DEST}/${slug}.tar"
+mv "/backup/${slug}.tar" "${DEST}/${slug}.tar"
 if [[ $? != 0 ]]; then
     echo "Could not move backup ${slug} to ${DEST}"
     exit 1
 fi
 
-chown backup-generator:backup-generator "${DEST}/${slug}.tar"
+chown "${OWNING_USER}:${OWNING_USER}" "${DEST}/${slug}.tar"
 if [[ $? != 0 ]]; then
     echo "Failed to update permissions on backup ${slug}" 1>&2
     exit 1

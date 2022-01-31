@@ -1,0 +1,33 @@
+name: backup-generator
+version: dev
+slug: backup-generator
+description: "Add-on for backup-hass.cron"
+arch:
+  - aarch64
+
+hassio_api: true
+hassio_role: backup
+map:
+  - backup:rw
+
+startup: services
+ports:
+  22/tcp: null
+
+options:
+  apks: []
+  authorized_keys: []
+  password: ""
+  server:
+    tcp_forwarding: false
+  backup_generator_authorized_keys: []
+schema:
+  apks:
+    - str
+  authorized_keys:
+    - str
+  password: password
+  server:
+    tcp_forwarding: bool
+  backup_generator_authorized_keys:
+    - str
