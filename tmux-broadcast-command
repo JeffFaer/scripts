@@ -5,6 +5,26 @@ IFS=$'\n'
 panes=( $(tmux list-panes -aF "#{pane_id} #{pane_current_command} #{session_name}.#{pane_index}") )
 unset IFS
 
+same_path() {
+  local a="$1"
+  local b="$2"
+  if [[ "$a" == "$b" ]]; then
+    return 0
+  fi
+
+  a="$(realpath "$a")"
+  if [[ $? != 0 ]]; then
+    return 1
+  fi
+
+  b="$(realpath "$b")"
+  if [[ $? != 0 ]]; then
+    return 1
+  fi
+
+  [[ "$a" == "$b" ]]
+}
+
 for pane in "${panes[@]}"; do
   split=( ${pane} )
   pane_id="${split[0]}"
@@ -16,7 +36,7 @@ for pane in "${panes[@]}"; do
     echo "Skipping ${name}, couldn't which ${cmd}"
     continue
   fi
-  if [[ "${SHELL}" != "${resolved_cmd}" ]]; then
+  if ! same_path "${SHELL}" "${resolved_cmd}"; then
     echo "Skipping ${name}, it's executing ${cmd}"
     continue
   fi
