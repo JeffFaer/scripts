@@ -5,7 +5,6 @@ usage() {
     echo "--date                defaults to today"
     echo "--destination-root    defaults to \$PWD ($PWD)"
     echo "--dry-run"
-    echo "--list-only"
     exit 1
 }
 
@@ -36,7 +35,7 @@ get_disk_usage() {
 #  Parse Arguments  #
 #####################
 
-opts=$(getopt -o 'h' --long 'help,date:,destination-root:,dry-run,list-only' -n "$0" -- "$@")
+opts=$(getopt -o 'h' --long 'help,date:,destination-root:,dry-run' -n "$0" -- "$@")
 exit_code=$?
 if [[ ${exit_code} != 0 ]]; then
     echo "Error parsing options: ${opts}"
@@ -47,7 +46,6 @@ eval set -- "${opts}"
 date=now
 destination_root=$PWD
 dry_run=
-list_only=
 
 while true; do
     case "$1" in
@@ -72,10 +70,6 @@ while true; do
             ;;
         --dry-run)
             dry_run=1
-            shift
-            ;;
-        --list-only)
-            list_only=1
             shift
             ;;
         *)
@@ -124,35 +118,26 @@ usage_before=$(get_disk_usage "${destination_root}")
 echo "Getting package list -> ${destination}/packages.dpkg"
 dpkg -l > "${destination}/packages.dpkg"
 
-if [[ -n "${list_only}" ]]; then
-    for path in "${paths_to_backup[@]}"; do
-        cmd=(ls -R "${path}")
-        echo "${cmd[*]}"
-        "${cmd[@]}" > "${destination}/${path//\//_}.ls"
-    done
-else
-    cmd=(rsync)
-    cmd+=(
-      --archive
-      --hard-links
-      --human-readable
-      --verbose
-      --progress
-      --relative
-      --filter ':- .backup_exclude'
-    )
-    if [[ -n "${dry_run}" ]]; then
-        cmd+=( --dry-run )
-    fi
-    if [[ -n "${previous_destination}" ]]; then
-        cmd+=( --link-dest "${previous_destination}" )
-    fi
-    cmd+=( "${paths_to_backup[@]}" "${destination}" )
-
-    echo "${cmd[*]}"
-    "${cmd[@]}"
+cmd=(rsync)
+cmd+=(
+  --archive
+  --hard-links
+  --human-readable
+  --verbose
+  --progress
+  --relative
+  --filter ':- .backup_exclude'
+)
+if [[ -n "${dry_run}" ]]; then
+    cmd+=( --dry-run )
 fi
+if [[ -n "${previous_destination}" ]]; then
+    cmd+=( --link-dest "${previous_destination}" )
+fi
+cmd+=( "${paths_to_backup[@]}" "${destination}" )
 
+echo "${cmd[*]}"
+"${cmd[@]}"
 
 echo "Estimating incremental disk usage."
 usage_after=$(get_disk_usage "${destination_root}")
