@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
+set -u
+
+dirs_to_list=( "$@" )
 
 interval_seconds=$((86400*3)) # 3 days
 max_backups=60                # 60 * 3 days = 180 days
-scripts_dir="$(dirname $(dirname "$0"))"
-dirs_to_list=( "$HOME" )
+scripts_dir="$(realpath "$(dirname "${BASH_SOURCE}")"/..)"
 
 dest="$(xdg-user-dir DOCUMENTS)/Computers/${HOSTNAME}"
 
