@@ -10,8 +10,17 @@ source "$(dirname "${BASH_SOURCE}")/common.cron" || exit 1
 backup_dir="$1"
 dirs_to_list=( "${@:2}" )
 
-backup_command=( cp -r --attributes-only \
-    "${dirs_to_list[@]}" "${backup_dir}/$(date +%Y.%m.%d)" )
+new_backup="${backup_dir}/$(date +%Y.%m.%d)"
+if [[ "${#dirs_to_list[@]}" -eq 1 ]]; then
+    backup_command=( cp -rT --attributes-only \
+        "${dirs_to_list[@]}" "${new_backup}" )
+else
+    do_cp() {
+        mkdir "${new_backup}"
+        cp -r --attributes "${dirs_to_list[@]}" "${new_backup}"
+    }
+    backup_command=( do_cp )
+fi
 
 backup::cron::periodic_with_maximum_backups \
     "${backup_dir}" "${BACKUP_INTERVAL}" "${MAX_BACKUPS}" \
