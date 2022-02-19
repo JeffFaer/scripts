@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -u
+
+source "$(dirname "${BASH_SOURCE}")/common.cron" || exit 1
+
+[[ $# -eq 3 ]] || exit 1
+backup_dir="${1:?}"
+backup_interval="${2:-$((86400*3))}" # 3 days
+max_backups="${3:-60}"               # 60 * 3 days = 180 days
+
+backup_crontab() {
+    crontab -l > "${backup_dir}/$(date +%Y.%m.%d)"
+}
+
+backup::cron::periodic_with_maximum_backups \
+    "${backup_dir}" "${backup_interval}" "${max_backups}" \
+    backup_crontab

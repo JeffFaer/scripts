@@ -12,18 +12,20 @@
 # $3: The number of backups we should retain
 # $4+: The backup command
 backup::cron::periodic_with_maximum_backups() {
-    local backup_dir="$1"
-    local backup_interval="$2"
-    local num_backups="$3"
+    local backup_dir="${1:?}"
+    local backup_interval="${2:?}"
+    local num_backups="${3:?}"
     local cmd=( "${@:4}" )
 
-    local seconds_since_last_backup=$(\
-        backup::cron::seconds_since_last_file_modified "${backup_dir}")
-    if [[ -n "${seconds_since_last_backup}" \
-        && "${seconds_since_last_backup}" -lt "${backup_interval}" ]]; then
-        local remaining=$((backup_interval-seconds_since_last_backup))
-        echo "Will backup again in $(display-seconds ${remaining})" 1>&2
-        return 0
+    if [[ "${backup_interval}" -ne 0 ]]; then
+        local seconds_since_last_backup=$(\
+            backup::cron::seconds_since_last_file_modified "${backup_dir}")
+        if [[ -n "${seconds_since_last_backup}" \
+            && "${seconds_since_last_backup}" -lt "${backup_interval}" ]]; then
+            local remaining=$((backup_interval-seconds_since_last_backup))
+            echo "Will backup again in $(display-seconds ${remaining})" 1>&2
+            return 0
+        fi
     fi
 
     "${cmd[@]}"
