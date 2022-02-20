@@ -8,28 +8,8 @@ source ~/.bash_functions || exit 1
 
 BACKUP_LOCATION="$(xdg-user-dir DOCUMENTS)/Computers"
 
-backup::unifi() {
-    "$(dirname "${BASH_SOURCE}")/unifi/backup-unifi.cron" "$@"
-}
-
 backup::octopi() {
     "$(dirname "${BASH_SOURCE}")/octopi/backup-octopi.cron" "$@"
-}
-
-backup::sonarr() {
-    "$(dirname "${BASH_SOURCE}")/*arr/backup-*arr.cron" "sonarr" "$@"
-}
-
-backup::radarr() {
-    "$(dirname "${BASH_SOURCE}")/*arr/backup-*arr.cron" "radarr" "$@"
-}
-
-backup::lidarr() {
-    "$(dirname "${BASH_SOURCE}")/*arr/backup-*arr.cron" "lidarr" "$@"
-}
-
-backup::readarr() {
-    "$(dirname "${BASH_SOURCE}")/*arr/backup-*arr.cron" "readarr" "$@"
 }
 
 backup::hass() {

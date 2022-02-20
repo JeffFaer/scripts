@@ -41,13 +41,47 @@ backup::cron::periodic_with_maximum_backups() {
     fi
 }
 
+# rsync's an external program's backup directory with another folder, with some
+# expectations about how often the external program should be backing itself up.
+#
+# $1: Backup directory
+# $2: Expected backup interval in seconds. This should probably have some wiggle
+#     room included.
+# $3: External program's backup directory
+# $4: Any extra rsync args.
+backup::cron::copy_external_backup_folder() {
+    local backup_dir="${1:?}"
+    local backup_interval="${2:?}"
+    local external_dir="${3:?}"
+    local extra_args=( "${@:4}" )
+
+    rsync --archive --delete "${extra_args[@]}" \
+        "${external_dir}" "${backup_dir}"
+    if [[ $? != 0 ]]; then
+        return 1
+    fi
+
+    local seconds_since_last_backup="$(\
+        backup::cron::seconds_since_last_file_modified "${backup_dir}")"
+    if [[ $? != 0 ]]; then
+        echo "There are no backup files in ${external_dir}." 1>&2
+        return 1
+    fi
+
+    echo "Last backed up $(display-seconds "${seconds_since_last_backup}") ago." 1>&2
+    if [[ "${seconds_since_last_backup}" -gt "${backup_interval}" ]]; then
+        echo "Expected at most $(display-seconds "${backup_interval}")." 1>&2
+        return 1
+    fi
+}
+
 # Prints the number of seconds since the most recently modified file in $1 was
 # modified.
 #
 # $1: A directory containing files.
 # @returns 1 if $1 is an empty directory.
 backup::cron::seconds_since_last_file_modified() {
-    local most_recent="$(ls -1td "$1"/* | head -1)"
+    local most_recent="$(ls -1td "$1"/* 2>/dev/null | head -1)"
     if [[ -z "${most_recent}" ]]; then
         return 1
     fi
