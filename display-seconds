@@ -4,4 +4,4 @@
 #
 # Displays a number of seconds in a human readable format.
 
-display-milliseconds $(($1 * 1000))
+"$(dirname "${BASH_SOURCE}")/display-milliseconds" $(($1 * 1000))

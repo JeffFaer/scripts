@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Common utilities for .cron backup scripts.
 
+_display_seconds="$(realpath "$(dirname "${BASH_SOURCE}")/../display-seconds")"
+
 # Implements a periodic backup with a maximum number of backups by
 #   1) Checking to see if the most recently modified file in a directory was
 #      modified after the backup interval
@@ -23,7 +25,7 @@ backup::cron::periodic_with_maximum_backups() {
         if [[ -n "${seconds_since_last_backup}" \
             && "${seconds_since_last_backup}" -lt "${backup_interval}" ]]; then
             local remaining=$((backup_interval-seconds_since_last_backup))
-            echo "Will backup again in $(display-seconds ${remaining})" 1>&2
+            echo "Will backup again in $("${_display_seconds}" ${remaining})" 1>&2
             return 0
         fi
     fi
@@ -68,9 +70,9 @@ backup::cron::copy_external_backup_folder() {
         return 1
     fi
 
-    echo "Last backed up $(display-seconds "${seconds_since_last_backup}") ago." 1>&2
+    echo "Last backed up $("${_display_seconds}" "${seconds_since_last_backup}") ago." 1>&2
     if [[ "${seconds_since_last_backup}" -gt "${backup_interval}" ]]; then
-        echo "Expected at most $(display-seconds "${backup_interval}")." 1>&2
+        echo "Expected at most $("${_display_seconds}" "${backup_interval}")." 1>&2
         return 1
     fi
 }
