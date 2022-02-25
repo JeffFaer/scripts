@@ -10,18 +10,34 @@ source "$(dirname "${BASH_SOURCE}")/common.cron" || exit 1
 backup_dir="$1"
 dirs_to_list=( "${@:2}" )
 
-new_backup="${backup_dir}/$(date +%Y.%m.%d)"
-if [[ "${#dirs_to_list[@]}" -eq 1 ]]; then
-    backup_command=( cp -rT --attributes-only \
-        "${dirs_to_list[@]}" "${new_backup}" )
-else
-    do_cp() {
+run_backup() {
+    local now="$(date +%Y.%m.%d)"
+    local new_backup="${backup_dir}/${now}"
+
+    if [[ "${#dirs_to_list[@]}" -eq 1 ]]; then
+        cp -rT --attributes-only "${dirs_to_list[@]}" "${new_backup}"
+    else
         mkdir "${new_backup}"
-        cp -r --attributes "${dirs_to_list[@]}" "${new_backup}"
-    }
-    backup_command=( do_cp )
-fi
+        cp -r --attributes-only "${dirs_to_list[@]}" "${new_backup}"
+    fi
+    if [[ $? != 0 ]]; then
+        echo "cp failed" 1>&2
+        return 1
+    fi
+
+    tar -cJf "${new_backup}.tar.xz" -C "${new_backup}" .
+    if [[ $? != 0 ]]; then
+        echo "tar failed" 1>&2
+        return 1
+    fi
+
+    rm -r "${new_backup}"
+    if [[ $? != 0 ]]; then
+        echo "rm failed" 1>&2
+        return 1
+    fi
+}
 
 backup::cron::periodic_with_maximum_backups \
     "${backup_dir}" "${BACKUP_INTERVAL}" "${MAX_BACKUPS}" \
-    "${backup_command[@]}"
+    run_backup
