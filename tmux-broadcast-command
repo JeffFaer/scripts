@@ -41,5 +41,5 @@ for pane in "${panes[@]}"; do
     continue
   fi
 
-  tmux send-keys -t "${pane_id}" "$*" "Enter"
+  tmux send-keys -t "${pane_id}" " tmux-broadcast-command" "M-#" "$*" "Enter"
 done
