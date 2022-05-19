@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+m3u="$1"
+
 echo "Looking for phones..."
 IFS=$'\n'
 gvfs=( $(ls -1d /run/user/$(id -u)/gvfs/* | sort -u) )
@@ -13,22 +15,14 @@ elif [[ ${#gvfs[@]} == 1 ]]; then
 else
     echo "Please select the phone."
     select phone in "${gvfs[@]}"; do
-        echo "Selected: $phone"
+        echo "Selected: ${phone}"
         break
     done
 fi
 
-if [[ -z "$1" ]]; then
-    if [ -f "$HOME/HDD/Music/To Phone.m3u" ]; then
-        m3u="$HOME/HDD/Music/To Phone.m3u"
-    fi
-else
-    m3u="$1"
-fi
-
 echo "Looking for Music directories..."
 IFS=$'\n'
-music_dirs=( $(find "$phone" -maxdepth 3 -name "Music" -type d | sort -u) )
+music_dirs=( $(find "${phone}" -maxdepth 3 -name "Music" -type d | sort -u) )
 unset IFS
 
 if [[ ${#music_dirs[@]} == 0 ]]; then
@@ -39,9 +33,9 @@ elif [[ ${#music_dirs[@]} == 1 ]]; then
 else
     echo "Please select the Music directory."
     select music_dir in "${music_dirs[@]}"; do
-        echo "Selected: $music_dir"
+        echo "Selected: ${music_dir}"
         break
     done
 fi
 
-copy-m3u "$m3u" "$music_dir"
+copy-m3u "${m3u}" "${music_dir}"
