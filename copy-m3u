@@ -5,50 +5,10 @@
 #
 # Copies an m3u file to a directory.
 # This script accounts for destinations that might be on gvfs.
-
-# This function has two forms:
-# progress clear
-#   - Clears the progress bar from the output line
-# progress show MIN MAX
-#   - Shows the progress bar MIN/MAX percent complete.
 #
-# You do not need to clear before showing twice in a row.
-progress() {
-    local action=$1
-
-    local length=50
-    if [[ $action == show ]]; then
-        local current=$2
-        local max=$3
-        local progress=$(bc -l <<< "$length * $current / $max")
-        progress=$(printf "%.0f" $progress)
-        local to_complete
-        let to_complete=$length-$progress
-
-        local fill=$(printf "%${progress}s")
-        local empty=$(printf "%${to_complete}s")
-
-        printf "\r${fill// /\#}${empty// /-}"
-    elif [[ $action == clear ]]; then
-        for i in $(seq 1 $length); do
-            printf "\b"
-        done
-        for i in $(seq 1 $length); do
-            printf " "
-        done
-        for i in $(seq 1 $length); do
-            printf "\b"
-        done
-    fi
-}
-
-if [[ -z "$1" ]] || [[ ! -f "$1" ]]; then
-    echo "Must provide valid m3u file."
-    exit 1
-fi
-
-# $1: *.m3u file
-# $2?: Destination. Default is ./{Name of m3u file}
+# $1: A directory to look for album art in
+# Echos the path to the album art, if found.
+# Returns 1 if not found.
 check_for_art() {
     local f
     for f in {album,cover}.{jpg,png}; do
@@ -61,26 +21,34 @@ check_for_art() {
     return 1
 }
 
-dir=$(dirname "$1")
+if [[ -z "$1" ]] || [[ ! -f "$1" ]]; then
+    echo "Must provide valid m3u file."
+    exit 1
+fi
+m3u_file="$1"
+
+if [[ "$#" -gt 1 ]]; then
+    dest="$2"
+else
+    dest="./${m3u_name}"
+fi
+
+dir=$(dirname "${m3u_file}")
 # File name
 m3u_name=${1##*/}
 # Strip extension
 m3u_name=${m3u_name%.*}
-if [[ "$#" -gt 1 ]]; then
-    dest="$2"
-else
-    dest="./$m3u_name"
-fi
-mkdir -p "$dest"
 
-echo "Copying $1 to $dest"
+mkdir -p "${dest}"
 
-if df -P -T "$dest" | tail -n +2 | awk '{print $2}' | grep -q gvfs; then
+echo "Copying ${m3u_file} to ${dest}"
+
+if df -P -T "${dest}" | tail -n +2 | awk '{print $2}' | grep -q gvfs; then
     is_gvfs=true
 fi
 
 copy() {
-    if [[ $is_gvfs ]]; then
+    if [[ -n "${is_gvfs}" ]]; then
         gio copy -p "$@"
     else
         ln "$@" 2>/dev/null || cp "$@"
@@ -88,32 +56,27 @@ copy() {
 }
 
 IFS=$'\n'
-m3u_entries=( $(grep -v "^#" "$1") )
+m3u_entries=( $(grep -v "^#" "${m3u_file}") )
 unset IFS
 
 total=${#m3u_entries[@]}
-current=0
 for m3u_entry in "${m3u_entries[@]}"; do
-    progress show $current $total
+    echo "Copying ${m3u_entry}..."
 
     file="${dir}/${m3u_entry}"
     parents=$(dirname "$m3u_entry")
 
     new_location=${dest}/${parents}
 
-    mkdir -p "$new_location"
-    copy "$file" "$new_location"
+    mkdir -p "${new_location}"
+    copy "${file}" "${new_location}"
 
     # check for album art
-    if [[ -z "$(check_for_art "$new_location")" ]]; then
+    if [[ -z "$(check_for_art "${new_location}")" ]]; then
         file_dir=${dir}/${parents}
-        art=$(check_for_art "$file_dir")
-        if [[ -n "$art" ]]; then
-            copy "$art" "$new_location"
+        art=$(check_for_art "${file_dir}")
+        if [[ -n "${art}" ]]; then
+            copy "${art}" "${new_location}"
         fi
     fi
-    ((current++))
 done
-
-progress show $current $total
-echo
