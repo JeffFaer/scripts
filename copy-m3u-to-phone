@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+echo "Looking for phones..."
+IFS=$'\n'
+gvfs=( $(ls -1d /run/user/$(id -u)/gvfs/* | sort -u) )
+unset IFS
+
+if [[ ${#gvfs[@]} == 0 ]]; then
+    echo "Could not find a phone"
+    exit 1
+elif [[ ${#gvfs[@]} == 1 ]]; then
+    phone=${gvfs[0]}
+else
+    echo "Please select the phone."
+    select phone in "${gvfs[@]}"; do
+        echo "Selected: $phone"
+        break
+    done
+fi
+
+if [[ -z "$1" ]]; then
+    if [ -f "$HOME/HDD/Music/To Phone.m3u" ]; then
+        m3u="$HOME/HDD/Music/To Phone.m3u"
+    fi
+else
+    m3u="$1"
+fi
+
+echo "Looking for Music directories..."
+IFS=$'\n'
+music_dirs=( $(find "$phone" -maxdepth 3 -name "Music" -type d | sort -u) )
+unset IFS
+
+if [[ ${#music_dirs[@]} == 0 ]]; then
+    echo "Could not find a Music directory on phone"
+    exit 1
+elif [[ ${#music_dirs[@]} == 1 ]]; then
+    music_dir=${music_dirs[0]}
+else
+    echo "Please select the Music directory."
+    select music_dir in "${music_dirs[@]}"; do
+        echo "Selected: $music_dir"
+        break
+    done
+fi
+
+copy-m3u "$m3u" "$music_dir"
