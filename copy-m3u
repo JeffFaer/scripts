@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# $1: An m3u file.
-# $2?: The destination directory. If not given, this script will create a
-#      directory with the same name as the m3u file.
-#
 # Copies an m3u file to a directory.
 # This script accounts for destinations that might be on gvfs.
 #
-# $1: A directory to look for album art in
+# @param $1: An m3u file.
+# @param $2?: The destination directory. If not given, this script will create a
+#             directory with the same name as the m3u file.
+
 # Echos the path to the album art, if found.
-# Returns 1 if not found.
+#
+# @param $1: A directory to look for album art in
+# @returns 1 if not found
 check_for_art() {
     local f
-    for f in {album,cover}.{jpg,png}; do
+    for f in {album,cover,front}.{jpg,png}; do
         if [[ -f "$1/$f" ]]; then
             echo "$1/$f"
             return
@@ -27,21 +28,22 @@ if [[ -z "$1" ]] || [[ ! -f "$1" ]]; then
 fi
 m3u_file="$1"
 
-if [[ "$#" -gt 1 ]]; then
-    dest="$2"
-else
-    dest="./${m3u_name}"
-fi
-
 dir=$(dirname "${m3u_file}")
 # File name
 m3u_name=${1##*/}
 # Strip extension
 m3u_name=${m3u_name%.*}
 
+if [[ "$#" -gt 1 ]]; then
+    dest="$2"
+else
+    dest="./${m3u_name}"
+fi
+
 mkdir -p "${dest}"
 
 echo "Copying ${m3u_file} to ${dest}"
+echo
 
 if df -P -T "${dest}" | tail -n +2 | awk '{print $2}' | grep -q gvfs; then
     is_gvfs=true
@@ -59,24 +61,23 @@ IFS=$'\n'
 m3u_entries=( $(grep -v "^#" "${m3u_file}") )
 unset IFS
 
-total=${#m3u_entries[@]}
 for m3u_entry in "${m3u_entries[@]}"; do
-    echo "Copying ${m3u_entry}..."
-
     file="${dir}/${m3u_entry}"
-    parents=$(dirname "$m3u_entry")
+    parents=$(dirname "${m3u_entry}")
 
-    new_location=${dest}/${parents}
-
+    new_location="${dest}/${parents}"
     mkdir -p "${new_location}"
-    copy "${file}" "${new_location}"
 
-    # check for album art
+    # Check for album art if it doesn't already exist.
     if [[ -z "$(check_for_art "${new_location}")" ]]; then
-        file_dir=${dir}/${parents}
-        art=$(check_for_art "${file_dir}")
+        file_dir="${dir}/${parents}"
+        art="$(check_for_art "${file_dir}")"
         if [[ -n "${art}" ]]; then
+            echo "Copying ${art##"${dir}/"}..."
             copy "${art}" "${new_location}"
         fi
     fi
+
+    echo "Copying ${m3u_entry}..."
+    copy "${file}" "${new_location}"
 done
