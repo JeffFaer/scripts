@@ -11,7 +11,8 @@ if [[ ${#gvfs[@]} == 0 ]]; then
     echo "Could not find a phone"
     exit 1
 elif [[ ${#gvfs[@]} == 1 ]]; then
-    phone=${gvfs[0]}
+    phone="${gvfs[0]}"
+    echo "Found: ${phone}"
 else
     echo "Please select the phone."
     select phone in "${gvfs[@]}"; do
@@ -30,6 +31,7 @@ if [[ ${#music_dirs[@]} == 0 ]]; then
     exit 1
 elif [[ ${#music_dirs[@]} == 1 ]]; then
     music_dir=${music_dirs[0]}
+    echo "Found: ${music_dir}"
 else
     echo "Please select the Music directory."
     select music_dir in "${music_dirs[@]}"; do
