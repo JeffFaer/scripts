@@ -48,6 +48,7 @@ backup::cron::periodic_with_maximum_backups() {
     if [[ $? != 0 ]]; then
         echo "Something seems to have gone wrong generating a new backup." 1>&2
         return 1
+    fi
     if [[ -z "${new_backup}" ]]; then
         echo "The new backup doesn't seem to exist." 1>&2
         return 1
