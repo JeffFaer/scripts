@@ -6,6 +6,9 @@
 # @param $2?: The destination directory. If not given, this script will create a
 #             directory with the same name as the m3u file.
 
+set -euo pipefail
+[[ -n "${DEBUG:-}" ]] && set -x
+
 # Echos the path to the album art, if found.
 #
 # @param $1: A directory to look for album art in
@@ -50,7 +53,7 @@ if df -P -T "${dest}" | tail -n +2 | awk '{print $2}' | grep -q gvfs; then
 fi
 
 copy() {
-    if [[ -n "${is_gvfs}" ]]; then
+    if [[ -n "${is_gvfs:-}" ]]; then
         gio copy -p "$@"
     else
         ln "$@" 2>/dev/null || cp "$@"
