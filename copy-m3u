@@ -60,9 +60,7 @@ copy() {
     fi
 }
 
-IFS=$'\n'
-m3u_entries=( $(grep -v "^#" "${m3u_file}") )
-unset IFS
+mapfile -t m3u_entries < <(grep -v "^#" "${m3u_file}")
 
 for m3u_entry in "${m3u_entries[@]}"; do
     file="${dir}/${m3u_entry}"
@@ -74,7 +72,7 @@ for m3u_entry in "${m3u_entries[@]}"; do
     # Check for album art if it doesn't already exist.
     if [[ -z "$(check_for_art "${new_location}")" ]]; then
         file_dir="${dir}/${parents}"
-        art="$(check_for_art "${file_dir}")"
+        art="$(check_for_art "${file_dir}" || true)"
         if [[ -n "${art}" ]]; then
             echo "Copying ${art##"${dir}/"}..."
             copy "${art}" "${new_location}"
