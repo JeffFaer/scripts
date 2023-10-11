@@ -3,20 +3,22 @@
 # mode.
 # e.g. docker-exec-it plex /bin/bash
 
-ids=( $(docker ps --filter "name=$1" --format "{{.ID}}" ) )
+mapfile -t ids < <(docker ps --filter "name=$1" --format "{{.ID}}")
 if [[ ${#ids[@]} -eq 0 ]]; then
     echo "No container matching name=$1 was found." 1>&2
     exit 1
 fi
 
-id="${ids[0]}"
-if [[ ${#ids[@]} -gt 1 ]]; then
-    names=()
-    for id in "${ids[@]}"; do
-        names+=( "$(docker container inspect "${id}" --format "{{.Name}}")" )
-    done
+names=()
+for id in "${ids[@]}"; do
+    names+=( "$(docker container inspect "${id}" --format "{{.Name}}")" )
+done
 
-    select n in "${names[@]}"; do
+if [[ ${#ids[@]} -eq 1 ]]; then
+    id="${ids[0]}"
+    echo "Running in ${names[0]}..."
+else
+    select _ in "${names[@]}"; do
         id="${ids[${REPLY}-1]}"
         break
     done
