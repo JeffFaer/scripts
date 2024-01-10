@@ -13,9 +13,9 @@ if [[ -z "${DISPLAY}" ]]; then
     exec "${@:2}"
 fi
 
-max=$1
+max=$(($1 * 1000))
 command="${*:2}"
-begin="$(date +%s)"
+begin="$(date +%s%3N)"
 alerted=0
 
 _alert() {
@@ -23,12 +23,12 @@ _alert() {
 
     if ((!alerted)); then
         alerted=1
-        local end="$(date +%s)"
+        local end="$(date +%s%3N)"
 
         local elapsed=$((end - begin))
         if [[ ${exit_status} != 0 || ${elapsed} -ge ${max} ]]; then
             icon=$([[ ${exit_status} == 0 ]] && echo info || echo error)
-            summary="Command took $(display-seconds "${elapsed}") to complete."
+            summary="Command took $(display-milliseconds "${elapsed}") to complete."
 
             notify-send -i "${icon}" "${summary}" "${command}"
         fi

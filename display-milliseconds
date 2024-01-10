@@ -17,23 +17,29 @@ hours=$((total_hours % 24))
 
 parts=()
 add_part() {
-    if [[ $2 -gt 0 ]]; then
-        [[ $2 -ne 1 ]] && local ending="s"
-        parts+=( "$(printf "${1}%s" "${@:2}" $ending)" )
-    fi
+  [[ $2 -ne 1 ]] && local ending="s"
+  parts+=( "$(printf "${1}%s" "${@:2}" $ending)" )
+}
+maybe_add_part() {
+  if [[ $2 -gt 0 ]]; then
+    add_part "$@"
+  fi
 }
 
-add_part '%d day' $total_days
-add_part '%d hour' $hours
-add_part '%d minute' $minutes
-add_part '%d second' $seconds
-add_part '%d millisecond' $milliseconds
+maybe_add_part '%d day' "${total_days}"
+maybe_add_part '%d hour' "${hours}"
+maybe_add_part '%d minute' "${minutes}"
+
+desc="seconds"
+if [[ "${seconds}" -eq 1 && "${milliseconds}" -eq 0 ]]; then
+  desc="second"
+fi
+parts+=( "$(printf "%d.%03d %s" "${seconds}" "${milliseconds}" "${desc}")" )
 
 num_parts=${#parts[@]}
-if [[ $num_parts -gt 1 ]]; then
+if [[ ${num_parts} -gt 1 ]]; then
     parts[num_parts]=${parts[num_parts - 1]}
     parts[num_parts - 1]="and"
 fi
 
-echo ${parts[*]}
-
+echo "${parts[*]}"
