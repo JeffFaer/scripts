@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-SLUG_REGEX="^slug: \"?([^ \"]+)\"?$"
+newline=$'\n'
+SLUG_REGEX="(^|${newline})slug: \"?([^ \"${newline}]+)\"?(${newline}|$)"
 OWNING_USER="backup-generator"
 DEST="$(eval echo ~${OWNING_USER})"
 
@@ -17,7 +18,7 @@ if [[ ! "${slug}" =~ ${SLUG_REGEX} ]]; then
     echo "Unrecognized backup output: ${slug}" 1>&2
     exit 1
 fi
-slug="${BASH_REMATCH[1]}"
+slug="${BASH_REMATCH[2]}"
 
 mv "/backup/${slug}.tar" "${DEST}/${slug}.tar"
 if [[ $? != 0 ]]; then

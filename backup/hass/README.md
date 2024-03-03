@@ -30,6 +30,7 @@ Scripts for periodically backing up a hass installation.
     [server] $ ssh-keygen -f ~/.ssh/hass_backup -N ''
     [hass]   <install backup-generator addon>
     [hass]   <add authorized keys in the UI>
+    [server] <create .ssh/config entry with the port for the addon>
     ```
 
     And then you should be able to make calls like:

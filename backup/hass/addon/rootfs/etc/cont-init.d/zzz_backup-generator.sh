@@ -12,6 +12,7 @@ if bashio::config.has_value "backup_generator_authorized_keys"; then
 
     rm -f ~backup-generator/.ssh/authorized_keys
 
+    # bashio::config doesn't like being piped directly into a file.
     while read -r line; do
         echo "$line" >> ~backup-generator/.ssh/authorized_keys
     done <<< "$(bashio::config "backup_generator_authorized_keys")"
