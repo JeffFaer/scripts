@@ -24,7 +24,7 @@ backup::cron::periodic_with_maximum_backups() {
     # 1) Check to see if we need to run a new backup.
     local previous_backup
     previous_backup="$(\
-        backup::cron::most_recently_modified_file "${backup_dir}")"
+        backup::cron::most_recently_modified_file "${backup_dir}" || true)"
     if [[ -n "${previous_backup}" && "${backup_interval}" -ne 0 ]]; then
         local seconds_since_last_backup=$(\
             backup::cron::seconds_since_last_modified "${previous_backup}")
@@ -36,16 +36,14 @@ backup::cron::periodic_with_maximum_backups() {
     fi
 
     # 2) Run a new backup.
-    "${cmd[@]}"
-    if [[ $? != 0 ]]; then
+    if ! "${cmd[@]}"; then
         echo "backup command failed" 1>&2
         return 1
     fi
 
     # 3) See if the new backup is the same as the previous backup.
     local new_backup
-    new_backup="$(backup::cron::most_recently_modified_file "${backup_dir}")"
-    if [[ $? != 0 ]]; then
+    if ! new_backup="$(backup::cron::most_recently_modified_file "${backup_dir}")"; then
         echo "Something seems to have gone wrong generating a new backup." 1>&2
         return 1
     fi
@@ -64,8 +62,7 @@ backup::cron::periodic_with_maximum_backups() {
     fi
 
     # 4) Keep only the n most recent backups.
-    backup::cron::keep_n_most_recent_files "${num_backups}" "${backup_dir}"
-    if [[ $? != 0 ]]; then
+    if ! backup::cron::keep_n_most_recent_files "${num_backups}" "${backup_dir}"; then
         echo "Could not prune old backups." 1>&2
         return 1
     fi
@@ -92,8 +89,7 @@ backup::cron::copy_external_backup_folder() {
     fi
 
     local most_recent
-    most_recent="$(backup::cron::most_recently_modified_file "${backup_dir}")"
-    if [[ $? != 0 ]]; then
+    if ! most_recent="$(backup::cron::most_recently_modified_file "${backup_dir}")"; then
         echo "There are no backup files in ${external_dir}." 1>&2
         return 1
     fi
