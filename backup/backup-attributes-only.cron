@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
+
+set -euo pipefail
+[[ -v DEBUG ]] && set -x
+
 BACKUP_INTERVAL="${BACKUP_INTERVAL:-$((86400*3))}" # 3 days
 MAX_BACKUPS="${MAX_BACKUPS:-60}"                   # 60 * 3 days = 180 days
 
-set -u
-
 source "$(dirname "${BASH_SOURCE}")/common.cron" || exit 1
 
-[[ $# -ge 2 ]] || exit 1
+(( $# >= 2 )) || exit 1
 backup_dir="$1"
 dirs_to_list=( "${@:2}" )
 
@@ -14,25 +16,23 @@ run_backup() {
     local now="$(date +%Y.%m.%d)"
     local new_backup="${backup_dir}/${now}"
 
+    local cp=( cp -r --attrbitues-only )
     if [[ "${#dirs_to_list[@]}" -eq 1 ]]; then
-        cp -rT --attributes-only "${dirs_to_list[@]}" "${new_backup}"
+        cp+=( -T )
     else
         mkdir "${new_backup}"
-        cp -r --attributes-only "${dirs_to_list[@]}" "${new_backup}"
     fi
-    if [[ $? != 0 ]]; then
+    if ! "${cp[@]}" "${dirs_to_list[@]}" "${new_backup}"; then
         echo "cp failed" 1>&2
         return 1
     fi
 
-    tar -cJf "${new_backup}.tar.xz" -C "${new_backup}" .
-    if [[ $? != 0 ]]; then
+    if ! tar -cJf "${new_backup}.tar.xz" -C "${new_backup}" --sort=name .; then
         echo "tar failed" 1>&2
         return 1
     fi
 
-    rm -r "${new_backup}"
-    if [[ $? != 0 ]]; then
+    if ! rm -r "${new_backup}"; then
         echo "rm failed" 1>&2
         return 1
     fi
