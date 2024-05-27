@@ -16,7 +16,7 @@ run_backup() {
     local now="$(date +%Y.%m.%d)"
     local new_backup="${backup_dir}/${now}"
 
-    local cp=( cp -r --attrbitues-only )
+    local cp=( cp -r --attributes-only )
     if [[ "${#dirs_to_list[@]}" -eq 1 ]]; then
         cp+=( -T )
     else
