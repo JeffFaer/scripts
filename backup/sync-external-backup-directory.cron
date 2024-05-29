@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
+
+set -euo pipefail
+[[ -v DEBUG ]] && set -x
+
 BACKUP_INTERVAL="${BACKUP_INTERVAL:-$((86400))}" # 1 day
-
-set -u
-
-source "$(dirname "${BASH_SOURCE}")/common.cron" || exit 1
-
-[[ $# -ge 2 ]] || exit 1
+(( $# >= 2 )) || exit 1
 backup_dir="${1:?}"
 external_dir="${2:?}"
 extra_args=( "${@:3}" )
+
+source "$(dirname "${BASH_SOURCE}")/common.cron" || exit 1
 
 backup::cron::copy_external_backup_folder \
     "${backup_dir}" "${BACKUP_INTERVAL}" "${external_dir}" "${extra_args[@]}"

@@ -77,6 +77,7 @@ backup::cron::periodic_with_maximum_backups() {
 # $3: External program's backup directory
 # $4: Any extra rsync args.
 backup::cron::copy_external_backup_folder() {
+    (( $# >= 3 )) || return 1
     local backup_dir="${1:?}"
     local backup_interval="${2:?}"
     local external_dir="${3:?}"
