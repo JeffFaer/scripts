@@ -135,11 +135,10 @@ backup::cron::keep_n_most_recent_files() {
 
     local num_backups=$(ls -1 "$dir" | wc -l)
     local num_extra_backups=$((num_backups - n))
-    if [[ $num_extra_backups -gt 0 ]]; then
-        local IFS=$'\n'
-        local to_remove=( $(ls -1td "$dir"/* | tail -"${num_extra_backups}") )
-        unset IFS
-        echo "Removing ${num_extra_backups} extra backups: ${to_remove[@]}" 1>&2
+    if ((num_extra_backups > 0)); then
+        local to_remove
+        mapfile -t to_remove < <(ls -1td "${dir}"/* | tail -"${num_extra_backups}")
+        echo "Removing ${num_extra_backups} extra backups: ${to_remove[*]}" 1>&2
         rm "${to_remove[@]}"
     fi
 }
