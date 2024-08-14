@@ -44,11 +44,11 @@ backup::cron::periodic_with_maximum_backups() {
     # 3) See if the new backup is the same as the previous backup.
     local new_backup
     if ! new_backup="$(backup::cron::most_recently_modified_file "${backup_dir}")"; then
-        echo "Something seems to have gone wrong generating a new backup." 1>&2
+        echo "Unable to find most recently modified backup file." 1>&2
         return 1
     fi
     if [[ -z "${new_backup}" ]]; then
-        echo "The new backup doesn't seem to exist." 1>&2
+        echo "The most recently modified backup file is the empty string?" 1>&2
         return 1
     fi
     if [[ "${previous_backup}" == "${new_backup}" ]]; then
