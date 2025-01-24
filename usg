@@ -17,6 +17,8 @@
 USG_CONNECTION="${USG_CONNECTION:-router}"
 CONTROLLER_CONNECTION="${CONTROLLER_CONNECTION:-unifi}"
 
+DATA_DIR="${DATA_DIR:-/srv/unifi/data/}"
+
 # https://github.com/evanphx/json-patch
 # Currently relying on my forked version:
 # https://github.com/evanphx/json-patch/pull/154
@@ -34,7 +36,7 @@ die() {
     exit 1
 }
 
-# usg::dump dumps the current, complete USG config.gateway.json to stdout.
+# usg::dump dumps the current, complete USG config.json to stdout.
 usg::dump() {
     [[ $# -eq 0 ]] || die "dump does not take any arguments."
 
@@ -42,7 +44,7 @@ usg::dump() {
         mca-ctrl -t dump-cfg
 }
 
-# usg::diff diffs the current, complete USG config.gateway.json with $1.
+# usg::diff diffs the current, complete USG config.json with $1.
 usg::diff() {
     [[ $# -eq 1 ]] || die "diff takes exactly one argument: old config"
     local old="$1"
@@ -51,14 +53,14 @@ usg::diff() {
 }
 
 # usg::partial-copy copies the given JSON value from the USG's
-# config.gateway.json to the Controller's config.gateway.json.
+# config.json to the Controller's config.gateway.json.
 #
 # The JSON values are identified by paths of the form "system.host-name".
 #
 # This command has two forms:
 #   1) <site name> <JSON path>...
 #      This form copies the values from the USG's current, complete
-#      config.gateway.json.
+#      config.json.
 #   2) <config file> <site name> <JSON path>...
 #      This form copies the values from the provided config file.
 usg::partial-copy() {
@@ -76,7 +78,7 @@ usg::partial-copy() {
     else
         source_config="$(usg::dump)"
         if [[ $? != 0 ]]; then
-            die "Could not fetch the current, complete config.gateway.json from the USG"
+            die "Could not fetch the current, complete config.json from the USG"
         fi
         site="$1"
         paths=( "${@:2}" )
@@ -152,7 +154,7 @@ usg::partial-copy() {
 }
 
 # usg::patch determines what has changed in the USG's config by diffing its
-# current, complete config.gateway.json with a locally stored copy (normally
+# current, complete config.json with a locally stored copy (normally
 # stored with usg::dump before modifying the USG's config), and then applies the
 # diff to the Controller's config.gateway.json.
 usg::patch(){
@@ -218,7 +220,7 @@ usg::patch(){
     fi
 }
 
-# usg::config-refresh refreshes the USG's config.gateway.json after a force
+# usg::config-refresh refreshes the USG's config.json after a force
 # provision to get rid of any transient differences that might exist (e.g.
 # "123" -> 123).
 usg::config-refresh() {
@@ -254,7 +256,7 @@ usg::rollback() {
 usg::_controller_config_remote_path() {
     [[ $# == 1 ]] || die "_controller_config_remote_path takes exactly one argument: site name"
     local site="$1"
-    echo "/srv/unifi/data/sites/${site}/config.gateway.json"
+    echo "${DATA_DIR}/sites/${site}/config.gateway.json"
 }
 
 usg::_fetch_controller_config() {
