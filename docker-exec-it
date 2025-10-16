@@ -3,6 +3,9 @@
 # mode.
 # e.g. docker-exec-it plex /bin/bash
 
+set -euo pipefail
+[[ -v DEBUG ]] && set -x
+
 mapfile -t ids < <(docker ps --filter "name=$1" --format "{{.ID}}")
 if [[ ${#ids[@]} -eq 0 ]]; then
     echo "No container matching name=$1 was found." 1>&2
