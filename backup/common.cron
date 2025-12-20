@@ -18,8 +18,10 @@ _display_seconds="$(realpath "$(dirname "${BASH_SOURCE}")/../display-seconds")"
 backup::cron::periodic_with_maximum_backups() {
     local backup_dir="${1:?}"
     local backup_interval="${2:?}"
-    local num_backups="${3:?}"
+    local backup_count="${3:?}"
     local cmd=( "${@:4}" )
+
+    trap 'DRY_RUN=1 backup::cron::keep_n_most_recent_files "${backup_count}" "${backup_dir}"' RETURN
 
     # 1) Check to see if we need to run a new backup.
     local previous_backup
@@ -62,7 +64,8 @@ backup::cron::periodic_with_maximum_backups() {
     fi
 
     # 4) Keep only the n most recent backups.
-    if ! backup::cron::keep_n_most_recent_files "${num_backups}" "${backup_dir}"; then
+    trap - RETURN
+    if ! backup::cron::keep_n_most_recent_files "${backup_count}" "${backup_dir}"; then
         echo "Could not prune old backups." 1>&2
         return 1
     fi
@@ -129,16 +132,25 @@ backup::cron::seconds_since_last_modified() {
 #
 # $1: n
 # $2: A directory
+#
+# DRY_RUN: Whether to actually remove files or not.
 backup::cron::keep_n_most_recent_files() {
     local n="$1"
     local dir="$2"
+    local dry_run="${DRY_RUN:-}"
 
-    local num_backups=$(ls -1 "$dir" | wc -l)
-    local num_extra_backups=$((num_backups - n))
-    if ((num_extra_backups > 0)); then
+    local backup_count=$(ls -1 "$dir" | wc -l)
+    local extra_backup_count=$((backup_count - n))
+    if ((extra_backup_count > 0)); then
         local to_remove
-        mapfile -t to_remove < <(ls -1td "${dir}"/* | tail -"${num_extra_backups}")
-        echo "Removing ${num_extra_backups} extra backups: ${to_remove[*]}" 1>&2
-        rm "${to_remove[@]}"
+        mapfile -t to_remove < <(ls -1td "${dir}"/* | tail -"${extra_backup_count}")
+        echo "There are ${extra_backup_count} extra backups:" 1>&2
+        local IFS=$'\n'
+        echo "${to_remove[*]}" 1>&2
+        unset IFS
+        if ! ((dry_run)); then
+            echo "Removing them." 1>&2
+            rm "${to_remove[@]}"
+        fi
     fi
 }
